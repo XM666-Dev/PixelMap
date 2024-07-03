@@ -1,0 +1,19 @@
+[gd_scene load_steps=4 format=3 uid="uid://d0p6wkleyo0og"]
+
+[ext_resource type="Script" path="res://scene/2d/pixel_map/pixel_map.gd" id="1_jjqan"]
+[ext_resource type="Resource" uid="uid://dyqbw5c3pkfgl" path="res://test/resource/atlas.tres" id="2_6mdr8"]
+[ext_resource type="Script" path="res://test/script/Sprite2D.gd" id="3_45mvw"]
+
+[node name="Node" type="Node"]
+
+[node name="PixelMap" type="Node2D" parent="."]
+unique_name_in_owner = true
+texture_filter = 1
+script = ExtResource("1_jjqan")
+tile_set = ExtResource("2_6mdr8")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+script = ExtResource("3_45mvw")
+
+[node name="Camera2D" type="Camera2D" parent="Sprite2D"]
+zoom = Vector2(4, 4)

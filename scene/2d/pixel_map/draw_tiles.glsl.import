@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://dpk0tcvxklsdb"
+path="res://.godot/imported/draw_tiles.glsl-ff827e063cd63686f39f2cf09635ee30.res"
+
+[deps]
+
+source_file="res://scene/2d/pixel_map/draw_tiles.glsl"
+dest_files=["res://.godot/imported/draw_tiles.glsl-ff827e063cd63686f39f2cf09635ee30.res"]
+
+[params]
+
