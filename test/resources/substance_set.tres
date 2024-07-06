@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="SubstanceSet" load_steps=11 format=3 uid="uid://c5x8b2rghfbkj"]
+
+[ext_resource type="Script" path="res://scene/resources/2d/substance_set.gd" id="1_nj2w8"]
+[ext_resource type="Script" path="res://scene/resources/2d/substance.gd" id="2_uob3v"]
+[ext_resource type="Texture2D" uid="uid://b3jtt7r6rxtqj" path="res://test/textures/dirt.png" id="3_0efor"]
+[ext_resource type="Texture2D" uid="uid://i7xjgt6qclq7" path="res://test/textures/stone.png" id="4_tsufl"]
+[ext_resource type="Texture2D" uid="uid://7iskamivdub4" path="res://test/textures/sand.png" id="5_bhds0"]
+[ext_resource type="Texture2D" uid="uid://biu0e1jnq3kga" path="res://test/textures/oak_planks.png" id="6_aemtq"]
+
+[sub_resource type="Resource" id="Resource_ghiwa"]
+script = ExtResource("2_uob3v")
+name = &""
+textures = Array[Texture2D]([ExtResource("3_0efor")])
+state = 0
+
+[sub_resource type="Resource" id="Resource_jpy8k"]
+script = ExtResource("2_uob3v")
+name = &""
+textures = Array[Texture2D]([ExtResource("4_tsufl")])
+state = 0
+
+[sub_resource type="Resource" id="Resource_eubwg"]
+script = ExtResource("2_uob3v")
+name = &""
+textures = Array[Texture2D]([ExtResource("5_bhds0")])
+state = 0
+
+[sub_resource type="Resource" id="Resource_4i1ye"]
+script = ExtResource("2_uob3v")
+name = &""
+textures = Array[Texture2D]([ExtResource("6_aemtq")])
+state = 0
+
+[resource]
+script = ExtResource("1_nj2w8")
+subtances = Array[ExtResource("2_uob3v")]([SubResource("Resource_ghiwa"), SubResource("Resource_jpy8k"), SubResource("Resource_eubwg"), SubResource("Resource_4i1ye")])

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://d046u2q0ahvs3"
-path="res://.godot/imported/spca.png-7f294d1e3c284063c4d2e0787263ab02.ctex"
+uid="uid://biu0e1jnq3kga"
+path="res://.godot/imported/oak_planks.png-ea94e7328623f68d2a515e3b6bc0ad38.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://test/texture/spca.png"
-dest_files=["res://.godot/imported/spca.png-7f294d1e3c284063c4d2e0787263ab02.ctex"]
+source_file="res://test/textures/oak_planks.png"
+dest_files=["res://.godot/imported/oak_planks.png-ea94e7328623f68d2a515e3b6bc0ad38.ctex"]
 
 [params]
 
