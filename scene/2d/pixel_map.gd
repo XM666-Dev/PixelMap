@@ -2,10 +2,12 @@ class_name PixelMap extends Node2D
 
 @export var pixel_set: PixelSet
 var render_extents: Vector2i
+var texture := Texture2DRD.new()
+@export var loading_extents: Vector2i
 var chunks: Dictionary
 var loading_chunks: Dictionary
 var unloading_chunks: Dictionary
-var texture := Texture2DRD.new()
+var chunks_dir := IS.open(Main.node.save_dir, "chunks")
 
 static var rd := RenderingServer.get_rendering_device()
 static var shader: RID
@@ -24,9 +26,14 @@ func get_size() -> Vector2i:
 
 func get_render_rect() -> Rect2i:
 	var rect := IS.get_viewport_rect_global(self)
-	var rect_position := IS.floor_divide(Vector2i(rect.position.floor()), Chunk.SIZE) as Vector2i
-	var rect_size := IS.ceil_divide(Vector2i(rect.end.ceil()), Chunk.SIZE) - rect_position as Vector2i + Vector2i.ONE
-	return Rect2i(rect_position, rect_size)
+	var rect_position := IS.floor_divide(rect.position, Vector2(Chunk.SIZE)) as Vector2
+	var rect_end := IS.ceil_divide(rect.end, Vector2(Chunk.SIZE)) as Vector2 + Vector2.ONE
+	return IS.rect_from_to(rect_position, rect_end)
+
+func get_loading_rect() -> Rect2i:
+	var rect := IS.get_viewport_rect_global(self)
+	var center := IS.floor_divide(rect.get_center(), Vector2(Chunk.SIZE)) as Vector2
+	return IS.rect_from_to(center - Vector2(loading_extents), center + Vector2(loading_extents))
 
 func has_chunk(coords: Vector2i) -> bool:
 	return chunks.has(coords)
@@ -161,3 +168,16 @@ func _draw():
 	if Input.is_action_just_pressed("ui_down"):
 		var output_bytes := rd.buffer_get_data(buf_chunks)
 		DisplayServer.clipboard_set(str(output_bytes))
+
+func _physics_process(_delta):
+	if chunks_dir != null:
+		pass
+		#var loading_rect := get_loading_rect()
+		#for y in IS.column(loading_rect):
+			#for x in IS.row(loading_rect):
+				#if
+		#for coords in chunks:
+			#if not loading_rect.has_point(coords):
+				#var chunk := get_chunk(coords)
+				#chunks.erase(coords)
+				#unloading_chunks[coords] = chunk

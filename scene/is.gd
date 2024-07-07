@@ -7,6 +7,9 @@ static func array(type: Variant, base: Array = []) -> Array:
 		return Array(base, TYPE_OBJECT, type, null)
 	return Array(base, TYPE_OBJECT, (type as Script).get_instance_base_type(), type)
 
+static func rect_from_to(position: Vector2, end: Vector2) -> Rect2:
+	return Rect2(position, end - position)
+
 static func row(rect: Rect2i):
 	return range(rect.position.x, rect.end.x)
 
@@ -72,6 +75,13 @@ static func make_atlas(textures: Array[Texture2D], format: Image.Format) -> Dict
 		image.blit_rect(src_image, Rect2i(Vector2i.ZERO, sizes[i]), atlas.points[i])
 	texture.set_image(image)
 	return {atlas_textures = atlas_textures, texture = texture}
+
+static func make_dir_recursive_absolute_and_open(path: String) -> DirAccess:
+	DirAccess.make_dir_recursive_absolute(path)
+	return DirAccess.open(path)
+
+static func open(dir: DirAccess, path: String) -> DirAccess:
+	return IS.make_dir_recursive_absolute_and_open(dir.get_current_dir().path_join(path))
 
 #enum CanvasLevel {
 	#LOCAL,

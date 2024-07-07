@@ -1,9 +1,13 @@
-extends Node2D
+class_name Main extends Node2D
+
+static var node: Main
+static var save_dir := IS.make_dir_recursive_absolute_and_open("user://save")
 
 var pixel_index := 0
 var draw_size := Vector2i(8, 8)
 
 func _init():
+	Main.node = self
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MAXIMIZED)
 
 func _physics_process(_delta):

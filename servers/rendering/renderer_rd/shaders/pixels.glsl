@@ -1,7 +1,7 @@
 #[compute]
 #version 460
 
-const uvec2 CHUNK_SIZE = uvec2(16, 16);
+const uvec2 CHUNK_SIZE = {16, 16};
 
 layout(local_size_x = CHUNK_SIZE.x, local_size_y = CHUNK_SIZE.y) in;
 
@@ -20,6 +20,15 @@ struct Chunk {
 	Cell cells[CHUNK_SIZE.y][CHUNK_SIZE.x];
 };
  
+int floor_modulo(int x, int y) {
+	int i = x % y;
+	return i < 0 ? i + y : i;
+}
+
+ivec2 floor_modulo(ivec2 x, ivec2 y) {
+	return ivec2(floor_modulo(x.x, y.x), floor_modulo(x.y, y.y));
+}
+
 layout(binding = 0) uniform sampler2D texPixelSet;
 layout(binding = 1, std430) restrict readonly buffer BufPixelSet {
 	Pixel pixels[];
@@ -43,7 +52,7 @@ void main() {
 	Cell cell = chunk.cells[gl_LocalInvocationID.y][gl_LocalInvocationID.x];
 	Pixel pixel = pixels[cell.pixel_id];
 	pixel = pixels[cell.pixel_id + time % pixel.frames];
-	ivec2 uv = ivec2(pixel.uvCoords + cellCoords % pixel.uvSize);
+	ivec2 uv = ivec2(pixel.uvCoords) + floor_modulo(cellCoords, ivec2(pixel.uvSize));
 	vec4 color = texelFetch(texPixelSet, uv, 0);
 	imageStore(imgMap, coords, color);
 }
