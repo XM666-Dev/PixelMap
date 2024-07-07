@@ -1,30 +1,32 @@
 class_name PixelMap extends Node2D
 
-@export var tile_set: AtlasImageTexture
-@export var render_extents: Vector2i
+@export var pixel_set: PixelSet
+var render_extents: Vector2i
 var chunks: Dictionary
+var loading_chunks: Dictionary
+var unloading_chunks: Dictionary
 var texture := Texture2DRD.new()
 
 static var rd := RenderingServer.get_rendering_device()
 static var shader: RID
 static var pipeline: RID
 
-var tex_tile_set: RID
-var buf_tile_const: RID
-var buf_map_data: RID
+var tex_pixel_set: RID
+var buf_pixel_set: RID
+var img_map: RID
+var buf_map: RID
 var buf_chunks: RID
-var tex_map_image: RID
 
 var uniform_set: RID
 
-func get_map_size() -> Vector2i:
-	return Chunk.SIZE * render_extents
+func get_size() -> Vector2i:
+	return render_extents * Chunk.SIZE
 
 func get_render_rect() -> Rect2i:
 	var rect := IS.get_viewport_rect_global(self)
-	var _position := IS.floor_divide(Vector2i(rect.position.floor()), Chunk.SIZE) as Vector2i
-	var size := IS.ceil_divide(Vector2i(rect.end.floor()), Chunk.SIZE) - _position as Vector2i + Vector2i.ONE
-	return Rect2i(_position, size)
+	var rect_position := IS.floor_divide(Vector2i(rect.position.floor()), Chunk.SIZE) as Vector2i
+	var rect_size := IS.ceil_divide(Vector2i(rect.end.ceil()), Chunk.SIZE) - rect_position as Vector2i + Vector2i.ONE
+	return Rect2i(rect_position, rect_size)
 
 func has_chunk(coords: Vector2i) -> bool:
 	return chunks.has(coords)
@@ -38,24 +40,22 @@ func local_to_chunk(coords: Vector2i) -> Vector2i:
 func local_to_cell(coords: Vector2i) -> Vector2i:
 	return IS.floor_modulo(coords, Chunk.SIZE)
 
-func set_cell_substance(coords: Vector2i, subtance_id: int) -> void:
+func set_cell_pixel(coords: Vector2i, pixel: int) -> void:
 	var chunk_coords := local_to_chunk(coords)
 	if not has_chunk(chunk_coords):
 		chunks[chunk_coords] = Chunk.new()
 	var chunk := get_chunk(chunk_coords)
 	var cell_coords := local_to_cell(coords)
-	chunk.set_cell_substance(cell_coords, subtance_id)
+	chunk.set_cell_pixel(cell_coords, pixel)
 
 static func _init():
 	prepare_shader()
 
 func _ready():
 	render_extents = get_render_rect().size
-	prepare_tile_set()
-	prepare_tile_const()
-	prepare_map_data()
+	prepare_pixel_set()
+	prepare_map()
 	prepare_chunks()
-	prepare_map_image()
 	prepare_uniform_set()
 
 static func prepare_shader():
@@ -64,82 +64,66 @@ static func prepare_shader():
 	shader = rd.shader_create_from_spirv(shader_spirv)
 	pipeline = rd.compute_pipeline_create(shader)
 
-func prepare_tile_set():
+func prepare_pixel_set():
 	var format = RDTextureFormat.new()
 	format.format = RenderingDevice.DATA_FORMAT_R8G8B8A8_UNORM
-	format.texture_type = RenderingDevice.TEXTURE_TYPE_2D
+	format.width = pixel_set.texture.get_width()
+	format.height = pixel_set.texture.get_height()
 	format.usage_bits = (
 		RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT | \
 		RenderingDevice.TEXTURE_USAGE_CAN_UPDATE_BIT
 	)
-	format.width = tile_set.get_width()
-	format.height = tile_set.get_height()
-	tex_tile_set = rd.texture_create(
-		format, RDTextureView.new(), [tile_set.get_image().get_data()]
-	)
+	tex_pixel_set = rd.texture_create(format, RDTextureView.new(), [pixel_set.texture.get_image().get_data()])
+	buf_pixel_set = rd.storage_buffer_create(pixel_set.data.size(), pixel_set.data)
 
-func prepare_tile_const():
-	var ints := PackedInt32Array()
-	for atlas_texture in tile_set.atlas_textures:
-		ints.append(int(atlas_texture.region.position.x))
-		ints.append(int(atlas_texture.region.position.y))
-		ints.append(int(atlas_texture.region.size.x))
-		ints.append(int(atlas_texture.region.size.y))
-		ints.append(1)
-		ints.append(0)
-	var bytes := ints.to_byte_array()
-	buf_tile_const = rd.storage_buffer_create(bytes.size(), bytes)
-
-func prepare_map_data():
-	buf_map_data = rd.uniform_buffer_create(16)
-
-func prepare_chunks():
-	var map_size := get_map_size()
-	var size := map_size.x * map_size.y * 4
-	buf_chunks = rd.storage_buffer_create(size)
-
-func prepare_map_image():
-	var map_size := get_map_size()
+func prepare_map():
+	var size := get_size()
 	var format = RDTextureFormat.new()
 	format.format = RenderingDevice.DATA_FORMAT_R8G8B8A8_UNORM
-	format.width = map_size.x
-	format.height = map_size.y
+	format.width = size.x
+	format.height = size.y
 	format.usage_bits = (
-		RenderingDevice.TEXTURE_USAGE_STORAGE_BIT| \
+		RenderingDevice.TEXTURE_USAGE_STORAGE_BIT | \
 		RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT
 	)
-	tex_map_image = rd.texture_create(format, RDTextureView.new())
-	texture.texture_rd_rid = tex_map_image
+	img_map = rd.texture_create(format, RDTextureView.new())
+	buf_map = rd.uniform_buffer_create(16)
+	texture.texture_rd_rid = img_map
+
+func prepare_chunks():
+	var size := get_size()
+	var size_bytes := size.x * size.y * 4
+	buf_chunks = rd.storage_buffer_create(size_bytes)
 
 func prepare_uniform_set():
-	var uni_tile_set := RDUniform.new()
-	uni_tile_set.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
-	uni_tile_set.binding = 0
-	uni_tile_set.add_id(rd.sampler_create(RDSamplerState.new()))
-	uni_tile_set.add_id(tex_tile_set)
+	var uni_tex_pixel_set := RDUniform.new()
+	uni_tex_pixel_set.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
+	uni_tex_pixel_set.binding = 0
+	uni_tex_pixel_set.add_id(rd.sampler_create(RDSamplerState.new()))
+	uni_tex_pixel_set.add_id(tex_pixel_set)
 
-	var uni_tile_const := RDUniform.new()
-	uni_tile_const.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
-	uni_tile_const.binding = 1
-	uni_tile_const.add_id(buf_tile_const)
+	var uni_buf_pixel_set := RDUniform.new()
+	uni_buf_pixel_set.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	uni_buf_pixel_set.binding = 1
+	uni_buf_pixel_set.add_id(buf_pixel_set)
 
-	var uni_map_data := RDUniform.new()
-	uni_map_data.uniform_type = RenderingDevice.UNIFORM_TYPE_UNIFORM_BUFFER
-	uni_map_data.binding = 2
-	uni_map_data.add_id(buf_map_data)
+	var uni_img_map := RDUniform.new()
+	uni_img_map.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
+	uni_img_map.binding = 2
+	uni_img_map.add_id(img_map)
 
-	var uni_chunks := RDUniform.new()
-	uni_chunks.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
-	uni_chunks.binding = 3
-	uni_chunks.add_id(buf_chunks)
+	var uni_buf_map := RDUniform.new()
+	uni_buf_map.uniform_type = RenderingDevice.UNIFORM_TYPE_UNIFORM_BUFFER
+	uni_buf_map.binding = 3
+	uni_buf_map.add_id(buf_map)
 
-	var uni_map_image := RDUniform.new()
-	uni_map_image.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
-	uni_map_image.binding = 4
-	uni_map_image.add_id(tex_map_image)
+	var uni_buf_chunks := RDUniform.new()
+	uni_buf_chunks.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	uni_buf_chunks.binding = 4
+	uni_buf_chunks.add_id(buf_chunks)
 
 	uniform_set = rd.uniform_set_create(
-		[uni_tile_set, uni_tile_const, uni_map_data, uni_chunks, uni_map_image], shader, 0
+		[uni_tex_pixel_set, uni_buf_pixel_set, uni_img_map, uni_buf_map, uni_buf_chunks], shader, 0
 	)
 
 func prepare_compute_list():
@@ -151,11 +135,11 @@ func prepare_compute_list():
 
 func _process(_delta):
 	var render_rect := get_render_rect()
-	var map_data := PackedInt32Array([
+	var data := PackedInt32Array([
 		render_rect.position.x, render_rect.position.y,
 		Time.get_ticks_msec() / (1000.0 / 60.0)
 	]).to_byte_array()
-	rd.buffer_update(buf_map_data, 0, 16, map_data)
+	rd.buffer_update(buf_map, 0, 16, data)
 	var rect := Rect2i(render_rect.position, render_extents)
 	var i := 0
 	for y in IS.column(rect):

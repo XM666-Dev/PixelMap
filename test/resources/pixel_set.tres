@@ -1,0 +1,50 @@
+[gd_resource type="Resource" script_class="PixelSet" load_steps=20 format=3 uid="uid://be4yagi61ovg5"]
+
+[ext_resource type="Script" path="res://scene/resources/2d/pixel_set.gd" id="1_51a5g"]
+[ext_resource type="Script" path="res://scene/resources/2d/pixel.gd" id="1_d513a"]
+[ext_resource type="Texture2D" uid="uid://c8fmrhxxbbpkv" path="res://test/textures/dirt/dirt0.png" id="2_ewffw"]
+[ext_resource type="Texture2D" uid="uid://mw6grc34xbnv" path="res://test/textures/air.png" id="2_ihlxt"]
+[ext_resource type="Texture2D" uid="uid://i7xjgt6qclq7" path="res://test/textures/stone.png" id="3_oawty"]
+[ext_resource type="Texture2D" uid="uid://curb81ivgj6qo" path="res://test/textures/dirt/dirt1.png" id="3_x3n24"]
+[ext_resource type="Texture2D" uid="uid://dkvtpjb58cwx5" path="res://test/textures/dirt/dirt2.png" id="4_vfbct"]
+[ext_resource type="Texture2D" uid="uid://7iskamivdub4" path="res://test/textures/sand.png" id="4_w7hdk"]
+[ext_resource type="Texture2D" uid="uid://biu0e1jnq3kga" path="res://test/textures/oak_planks.png" id="5_4i71y"]
+[ext_resource type="Texture2D" uid="uid://cnimme5rxfx52" path="res://test/textures/dirt/dirt3.png" id="5_17n5l"]
+[ext_resource type="Texture2D" uid="uid://biny0tym41y0s" path="res://test/textures/dirt/dirt4.png" id="6_np87u"]
+[ext_resource type="Texture2D" uid="uid://b2v315lsj72h0" path="res://test/textures/dirt/dirt5.png" id="7_ataal"]
+[ext_resource type="Texture2D" uid="uid://1aucy6xpjsxe" path="res://test/textures/dirt/dirt6.png" id="8_0bs0t"]
+[ext_resource type="Texture2D" uid="uid://dhftsunb8ipq5" path="res://test/textures/dirt/dirt7.png" id="9_yolbp"]
+
+[sub_resource type="Resource" id="Resource_4m54q"]
+script = ExtResource("1_d513a")
+name = &""
+textures = Array[Texture2D]([ExtResource("2_ihlxt")])
+state = 0
+
+[sub_resource type="Resource" id="Resource_wf4uh"]
+script = ExtResource("1_d513a")
+name = &""
+textures = Array[Texture2D]([ExtResource("2_ewffw"), ExtResource("3_x3n24"), ExtResource("4_vfbct"), ExtResource("5_17n5l"), ExtResource("6_np87u"), ExtResource("7_ataal"), ExtResource("8_0bs0t"), ExtResource("9_yolbp")])
+state = 0
+
+[sub_resource type="Resource" id="Resource_fkk5k"]
+script = ExtResource("1_d513a")
+name = &""
+textures = Array[Texture2D]([ExtResource("3_oawty")])
+state = 0
+
+[sub_resource type="Resource" id="Resource_fsmh6"]
+script = ExtResource("1_d513a")
+name = &""
+textures = Array[Texture2D]([ExtResource("4_w7hdk")])
+state = 0
+
+[sub_resource type="Resource" id="Resource_mr062"]
+script = ExtResource("1_d513a")
+name = &""
+textures = Array[Texture2D]([ExtResource("5_4i71y")])
+state = 0
+
+[resource]
+script = ExtResource("1_51a5g")
+pixels = Array[ExtResource("1_d513a")]([SubResource("Resource_4m54q"), SubResource("Resource_wf4uh"), SubResource("Resource_fkk5k"), SubResource("Resource_fsmh6"), SubResource("Resource_mr062")])

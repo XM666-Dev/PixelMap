@@ -5,48 +5,45 @@ const uvec2 CHUNK_SIZE = uvec2(16, 16);
 
 layout(local_size_x = CHUNK_SIZE.x, local_size_y = CHUNK_SIZE.y) in;
 
-struct TileConst {
+struct Pixel {
 	uvec2 uvCoords;
 	uvec2 uvSize;
 	uint frames;
-};//alignment = 6 bytes
+};
 
-struct Tile {
-	uint type;
+struct Cell {
+	uint pixel_id;
 	//uvec4 color;
 };
 
 struct Chunk {
-	Tile tiles[CHUNK_SIZE.y][CHUNK_SIZE.x];
+	Cell cells[CHUNK_SIZE.y][CHUNK_SIZE.x];
 };
  
-//const
-layout(binding = 0) uniform sampler2D tileSet;
-layout(binding = 1, std430) restrict readonly buffer TileConsts {
-	TileConst tileConsts[];
+layout(binding = 0) uniform sampler2D texPixelSet;
+layout(binding = 1, std430) restrict readonly buffer BufPixelSet {
+	Pixel pixels[];
 };
 
-//input
-layout(binding = 2, std140) uniform MapData {
+layout(binding = 2) restrict writeonly uniform image2D imgMap;
+layout(binding = 3, std140) uniform BufMap {
 	ivec2 chunkCoords;
 	uint time;
 };
-layout(binding = 3, std430) restrict readonly buffer Chunks {
+
+layout(binding = 4, std430) restrict readonly buffer BufChunks {
 	Chunk chunks[];
 };
 
-//output
-layout(binding = 4) restrict writeonly uniform image2D mapImage;
-
 void main() {
-	ivec2 drawCoords = ivec2(gl_GlobalInvocationID.xy);
-	ivec2 cellCoords = chunkCoords * ivec2(CHUNK_SIZE) + drawCoords;
+	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+	ivec2 cellCoords = chunkCoords * ivec2(CHUNK_SIZE) + coords;
 	uint chunkIndex = gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x;
 	Chunk chunk = chunks[chunkIndex];
-	Tile tile = chunk.tiles[gl_LocalInvocationID.y][gl_LocalInvocationID.x];
-	TileConst tileConst = tileConsts[tile.type];
-	tileConst = tileConsts[tile.type + time % tileConst.frames];
-	ivec2 uv = ivec2(tileConst.uvCoords + cellCoords % tileConst.uvSize);
-	vec4 color = texelFetch(tileSet, uv, 0);
-	imageStore(mapImage, drawCoords, color);
+	Cell cell = chunk.cells[gl_LocalInvocationID.y][gl_LocalInvocationID.x];
+	Pixel pixel = pixels[cell.pixel_id];
+	pixel = pixels[cell.pixel_id + time % pixel.frames];
+	ivec2 uv = ivec2(pixel.uvCoords + cellCoords % pixel.uvSize);
+	vec4 color = texelFetch(texPixelSet, uv, 0);
+	imageStore(imgMap, coords, color);
 }

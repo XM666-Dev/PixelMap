@@ -56,6 +56,23 @@ static func set_properties(object: Object, properties: Dictionary):
 		assert(property_path in object)
 		object.set_indexed(property_path, properties[property_path])
 
+static func make_atlas(textures: Array[Texture2D], format: Image.Format) -> Dictionary:
+	var sizes := PackedVector2Array(textures.map(func(texture): return texture.get_size()))
+	var atlas := Geometry2D.make_atlas(sizes)
+	var image := Image.create(atlas.size.x, atlas.size.y, false, format)
+	var atlas_textures := [] as Array[AtlasTexture]
+	var texture := ImageTexture.new()
+	for i in textures.size():
+		var atlas_texture := AtlasTexture.new()
+		atlas_texture.atlas = texture
+		atlas_texture.region = Rect2(atlas.points[i], sizes[i])
+		atlas_textures.append(atlas_texture)
+		var src_image := textures[i].get_image()
+		src_image.convert(format)
+		image.blit_rect(src_image, Rect2i(Vector2i.ZERO, sizes[i]), atlas.points[i])
+	texture.set_image(image)
+	return {atlas_textures = atlas_textures, texture = texture}
+
 #enum CanvasLevel {
 	#LOCAL,
 	#PARENT,
