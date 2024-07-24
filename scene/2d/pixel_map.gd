@@ -3,11 +3,11 @@ class_name PixelMap extends Node2D
 @export var pixel_set: PixelSet
 var render_extents: Vector2i
 var texture := Texture2DRD.new()
-@export var loading_extents: Vector2i
+@export var process_extents: Vector2i
+var previous_process_rect: Rect2i
 var chunks: Dictionary
 var loading_chunks: Dictionary
 var unloading_chunks: Dictionary
-var chunks_dir := IS.open(Main.node.save_dir, "chunks")
 
 static var rd := RenderingServer.get_rendering_device()
 static var shader: RID
@@ -24,16 +24,20 @@ var uniform_set: RID
 func get_size() -> Vector2i:
 	return render_extents * Chunk.SIZE
 
+func get_render_extents() -> Vector2i:
+	var rect := IS.get_viewport_rect_global(self)
+	return Vector2i((rect.size / Vector2(Chunk.SIZE)).ceil()) + Vector2i.ONE
+
 func get_render_rect() -> Rect2i:
 	var rect := IS.get_viewport_rect_global(self)
-	var rect_position := IS.floor_divide(rect.position, Vector2(Chunk.SIZE)) as Vector2
-	var rect_end := IS.ceil_divide(rect.end, Vector2(Chunk.SIZE)) as Vector2 + Vector2.ONE
-	return IS.rect_from_to(rect_position, rect_end)
+	var rect_position := Vector2i((rect.position / Vector2(Chunk.SIZE)).floor())
+	var rect_end := Vector2i((rect.end / Vector2(Chunk.SIZE)).ceil())
+	return IS.rect2i_range(rect_position, rect_end)
 
-func get_loading_rect() -> Rect2i:
+func get_process_rect() -> Rect2i:
 	var rect := IS.get_viewport_rect_global(self)
-	var center := IS.floor_divide(rect.get_center(), Vector2(Chunk.SIZE)) as Vector2
-	return IS.rect_from_to(center - Vector2(loading_extents), center + Vector2(loading_extents))
+	var center := Vector2i((rect.get_center() / Vector2(Chunk.SIZE)).floor())
+	return IS.rect2i_range(center - process_extents, center + process_extents)
 
 func has_chunk(coords: Vector2i) -> bool:
 	return chunks.has(coords)
@@ -49,17 +53,16 @@ func local_to_cell(coords: Vector2i) -> Vector2i:
 
 func set_cell_pixel(coords: Vector2i, pixel: int) -> void:
 	var chunk_coords := local_to_chunk(coords)
-	if not has_chunk(chunk_coords):
-		chunks[chunk_coords] = Chunk.new()
+	if not has_chunk(chunk_coords): return
 	var chunk := get_chunk(chunk_coords)
 	var cell_coords := local_to_cell(coords)
 	chunk.set_cell_pixel(cell_coords, pixel)
 
-static func _init():
+static func _static_init():
 	prepare_shader()
 
 func _ready():
-	render_extents = get_render_rect().size
+	render_extents = get_render_extents()
 	prepare_pixel_set()
 	prepare_map()
 	prepare_chunks()
@@ -90,8 +93,8 @@ func prepare_map():
 	format.width = size.x
 	format.height = size.y
 	format.usage_bits = (
-		RenderingDevice.TEXTURE_USAGE_STORAGE_BIT | \
-		RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT
+		RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT | \
+		RenderingDevice.TEXTURE_USAGE_STORAGE_BIT
 	)
 	img_map = rd.texture_create(format, RDTextureView.new())
 	buf_map = rd.uniform_buffer_create(16)
@@ -99,7 +102,7 @@ func prepare_map():
 
 func prepare_chunks():
 	var size := get_size()
-	var size_bytes := size.x * size.y * 4
+	var size_bytes := size.x * size.y * Chunk.TILE_SIZE * 4
 	buf_chunks = rd.storage_buffer_create(size_bytes)
 
 func prepare_uniform_set():
@@ -147,37 +150,28 @@ func _process(_delta):
 		Time.get_ticks_msec() / (1000.0 / 60.0)
 	]).to_byte_array()
 	rd.buffer_update(buf_map, 0, 16, data)
-	var rect := Rect2i(render_rect.position, render_extents)
-	var i := 0
-	for y in IS.column(rect):
-		for x in IS.row(rect):
+	for y in IS.column(render_rect):
+		for x in IS.row(render_rect):
 			var coords := Vector2i(x, y)
-			if not has_chunk(coords):
-				chunks[coords] = Chunk.new()
+			if not has_chunk(coords): continue
 			var chunk := get_chunk(coords)
 			var bytes := chunk.data.to_byte_array()
 			var size := bytes.size()
-			rd.buffer_update(buf_chunks, size * i, size, bytes)
-			i = i + 1
+			var render_coords := IS.vector2i_posmodv(coords, render_extents)
+			var render_index := render_coords.y * render_extents.x + render_coords.x
+			rd.buffer_update(buf_chunks, render_index * size, size, bytes)
 	prepare_compute_list()
 	queue_redraw()
 
 func _draw():
-	var render_rect := get_render_rect()
-	draw_texture(texture, render_rect.position * Chunk.SIZE)
-	if Input.is_action_just_pressed("ui_down"):
-		var output_bytes := rd.buffer_get_data(buf_chunks)
-		DisplayServer.clipboard_set(str(output_bytes))
+	var rect := IS.get_viewport_rect_global(self)
+	draw_texture_rect_region(texture, rect, rect)
 
 func _physics_process(_delta):
-	if chunks_dir != null:
-		pass
-		#var loading_rect := get_loading_rect()
-		#for y in IS.column(loading_rect):
-			#for x in IS.row(loading_rect):
-				#if
-		#for coords in chunks:
-			#if not loading_rect.has_point(coords):
-				#var chunk := get_chunk(coords)
-				#chunks.erase(coords)
-				#unloading_chunks[coords] = chunk
+	if Main.chunks_dir != null:
+		var process_rect := get_process_rect()
+		for y in IS.column(process_rect):
+			for x in IS.row(process_rect):
+				var coords := Vector2i(x, y)
+				if not has_chunk(coords):
+					chunks[coords] = Chunk.new()

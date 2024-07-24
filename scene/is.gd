@@ -7,8 +7,11 @@ static func array(type: Variant, base: Array = []) -> Array:
 		return Array(base, TYPE_OBJECT, type, null)
 	return Array(base, TYPE_OBJECT, (type as Script).get_instance_base_type(), type)
 
-static func rect_from_to(position: Vector2, end: Vector2) -> Rect2:
+static func rect2_range(position: Vector2, end: Vector2) -> Rect2:
 	return Rect2(position, end - position)
+
+static func rect2i_range(position: Vector2i, end: Vector2i) -> Rect2i:
+	return Rect2i(position, end - position)
 
 static func row(rect: Rect2i):
 	return range(rect.position.x, rect.end.x)
@@ -50,6 +53,23 @@ static func ceil_modulo(x: Variant, y: Variant) -> Variant:
 		return Vector2i(ceil_modulo(x.x, y.x), ceil_modulo(x.y, y.y))
 	var value: Variant = modulo(x, y)
 	return value - y if value > 0 else value
+
+static func vector2i_posmodv(x: Vector2i, y: Vector2i) -> Vector2i:
+	return Vector2i(posmod(x.x, y.x), posmod(x.y, y.y))
+
+static func clip_rects(rect_a: Rect2i, rect_b: Rect2i) -> Array[Rect2i]:
+	var result := [] as Array[Rect2i]
+	var position_difference := rect_b.position - rect_a.position
+	var end_difference := rect_a.end - rect_b.end
+	if position_difference.x > 0:
+		result.push_back(Rect2i(rect_a.position, Vector2i(position_difference.x, rect_a.size.y)))
+	if position_difference.y > 0:
+		result.push_back(Rect2i(rect_b.position.x, rect_a.position.y, rect_b.size.x, position_difference.y))
+	if end_difference.x > 0:
+		result.push_back(Rect2i(rect_b.end.x, rect_a.position.y, end_difference.x, rect_a.size.y))
+	if end_difference.y > 0:
+		result.push_back(rect2i_range(Vector2(rect_a.position.x, rect_b.end.y), Vector2(rect_b.end.x, rect_a.end.y)))
+	return result
 
 static func get_viewport_rect_global(item: CanvasItem) -> Rect2:
 	return item.get_viewport_transform().affine_inverse() * item.get_viewport_rect()

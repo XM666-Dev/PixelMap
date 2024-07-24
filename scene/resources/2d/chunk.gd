@@ -7,7 +7,6 @@ var data: PackedInt32Array
 
 func _init():
 	data.resize(SIZE.x * SIZE.y * TILE_SIZE)
-	data.fill(-1)
 
 func get_cell_pixel(coords: Vector2i) -> int:
 	var tile_index := (coords.y * SIZE.x + coords.x) * TILE_SIZE

@@ -15,7 +15,6 @@ unique_name_in_owner = true
 texture_repeat = 2
 script = ExtResource("2_uhw1h")
 pixel_set = ExtResource("3_q1jr4")
-process_extents = Vector2i(32, 32)
 
 [node name="Player" type="Node2D" parent="."]
 script = ExtResource("4_gk3bw")

@@ -2,9 +2,10 @@ class_name Main extends Node2D
 
 static var node: Main
 static var save_dir := IS.make_dir_recursive_absolute_and_open("user://save")
+static var chunks_dir := IS.open(Main.save_dir, "chunks")
 
 var pixel_index := 0
-var draw_size := Vector2i(8, 8)
+var draw_size := Vector2i(16, 16)
 
 func _init():
 	Main.node = self

@@ -13,7 +13,7 @@ struct Pixel {
 
 struct Cell {
 	uint pixel_id;
-	//uvec4 color;
+	//vec4 color;
 };
 
 struct Chunk {
