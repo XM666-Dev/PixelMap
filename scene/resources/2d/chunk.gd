@@ -1,17 +1,32 @@
 class_name Chunk extends Resource
 
-const SIZE := Vector2i(16, 16)
+const SIZE := Vector2i(32, 32)
 const TILE_SIZE := 1
 
-var data: PackedInt32Array
+static var NULL_BYTES := PackedByteArray()
 
-func _init():
+var data: PackedInt32Array
+var modified: bool
+
+static func _static_init():
+	NULL_BYTES.resize(SIZE.x * SIZE.y * TILE_SIZE * 4)
+
+func _init(data := PackedInt32Array()):
 	data.resize(SIZE.x * SIZE.y * TILE_SIZE)
+	self.data = data
+
+func serialize() -> PackedByteArray:
+	return data.to_byte_array()
+
+static func deserialize(bytes: PackedByteArray) -> Chunk:
+	var chunk := Chunk.new(bytes.to_int32_array())
+	return chunk
 
 func get_cell_pixel(coords: Vector2i) -> int:
 	var tile_index := (coords.y * SIZE.x + coords.x) * TILE_SIZE
-	return data[tile_index + 0]
+	return data[tile_index]
 
 func set_cell_pixel(coords: Vector2i, pixel: int) -> void:
 	var tile_index := (coords.y * SIZE.x + coords.x) * TILE_SIZE
-	data[tile_index + 0] = pixel
+	data[tile_index] = pixel
+	modified = true

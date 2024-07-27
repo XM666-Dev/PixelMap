@@ -1,7 +1,7 @@
 #[compute]
 #version 460
 
-const uvec2 CHUNK_SIZE = {16, 16};
+const uvec2 CHUNK_SIZE = {32, 32};
 
 layout(local_size_x = CHUNK_SIZE.x, local_size_y = CHUNK_SIZE.y) in;
 
@@ -37,6 +37,7 @@ layout(binding = 1, std430) restrict readonly buffer BufPixelSet {
 layout(binding = 2) restrict writeonly uniform image2D imgMap;
 layout(binding = 3, std140) uniform BufMap {
 	ivec2 chunkCoords;
+	uvec2 chunkExtents;
 	uint time;
 };
 

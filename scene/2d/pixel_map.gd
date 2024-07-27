@@ -5,9 +5,23 @@ var render_extents: Vector2i
 var texture := Texture2DRD.new()
 @export var process_extents: Vector2i
 var previous_process_rect: Rect2i
+var chunk_operations: Array[ChunkOperation]
+var operation_task := 0
 var chunks: Dictionary
-var loading_chunks: Dictionary
-var unloading_chunks: Dictionary
+#var operation_coords: Array[Vector2i]
+#var load_coords: Array[Vector2i]
+#var save_coords: Array[Vector2i]
+#var load_task := 0
+#var save_task := 0
+
+class ChunkOperation:
+	var coords: Vector2i
+	var type: Type
+
+	enum Type {
+		LOAD,
+		SAVE
+	}
 
 static var rd := RenderingServer.get_rendering_device()
 static var shader: RID
@@ -39,24 +53,24 @@ func get_process_rect() -> Rect2i:
 	var center := Vector2i((rect.get_center() / Vector2(Chunk.SIZE)).floor())
 	return IS.rect2i_range(center - process_extents, center + process_extents)
 
-func has_chunk(coords: Vector2i) -> bool:
-	return chunks.has(coords)
-
 func get_chunk(coords: Vector2i) -> Chunk:
-	return chunks[coords]
+	return chunks.get(coords)
 
 func local_to_chunk(coords: Vector2i) -> Vector2i:
-	return IS.floor_divide(coords, Chunk.SIZE)
+	return IS.vector2i_posdivv(coords, Chunk.SIZE)
 
 func local_to_cell(coords: Vector2i) -> Vector2i:
-	return IS.floor_modulo(coords, Chunk.SIZE)
+	return IS.vector2i_posmodv(coords, Chunk.SIZE)
 
 func set_cell_pixel(coords: Vector2i, pixel: int) -> void:
 	var chunk_coords := local_to_chunk(coords)
-	if not has_chunk(chunk_coords): return
 	var chunk := get_chunk(chunk_coords)
+	if chunk == null: return
 	var cell_coords := local_to_cell(coords)
 	chunk.set_cell_pixel(cell_coords, pixel)
+
+static func get_chunk_path(coords: Vector2i) -> String:
+	return Main.chunks_dir.get_current_dir().path_join(str(coords))
 
 static func _static_init():
 	prepare_shader()
@@ -67,6 +81,8 @@ func _ready():
 	prepare_map()
 	prepare_chunks()
 	prepare_uniform_set()
+	var tree := get_tree()
+	tree.root.connect("close_requested", close_requested)
 
 static func prepare_shader():
 	var shader_file := preload("res://servers/rendering/renderer_rd/shaders/pixels.glsl")
@@ -97,7 +113,7 @@ func prepare_map():
 		RenderingDevice.TEXTURE_USAGE_STORAGE_BIT
 	)
 	img_map = rd.texture_create(format, RDTextureView.new())
-	buf_map = rd.uniform_buffer_create(16)
+	buf_map = rd.uniform_buffer_create(32)
 	texture.texture_rd_rid = img_map
 
 func prepare_chunks():
@@ -147,31 +163,97 @@ func _process(_delta):
 	var render_rect := get_render_rect()
 	var data := PackedInt32Array([
 		render_rect.position.x, render_rect.position.y,
+		render_rect.size.x, render_rect.size.y,
 		Time.get_ticks_msec() / (1000.0 / 60.0)
 	]).to_byte_array()
 	rd.buffer_update(buf_map, 0, 16, data)
-	for y in IS.column(render_rect):
-		for x in IS.row(render_rect):
-			var coords := Vector2i(x, y)
-			if not has_chunk(coords): continue
-			var chunk := get_chunk(coords)
-			var bytes := chunk.data.to_byte_array()
-			var size := bytes.size()
-			var render_coords := IS.vector2i_posmodv(coords, render_extents)
-			var render_index := render_coords.y * render_extents.x + render_coords.x
-			rd.buffer_update(buf_chunks, render_index * size, size, bytes)
+	for coords in IS.rect2i_to_points(render_rect):
+		var chunk := get_chunk(coords)
+		var bytes := chunk.data.to_byte_array() if chunk != null else Chunk.NULL_BYTES
+		var size := bytes.size()
+		var render_coords := IS.vector2i_posmodv(coords, render_extents)
+		var render_index := render_coords.y * render_extents.x + render_coords.x
+		rd.buffer_update(buf_chunks, render_index * size, size, bytes)
 	prepare_compute_list()
 	queue_redraw()
 
 func _draw():
 	var rect := IS.get_viewport_rect_global(self)
 	draw_texture_rect_region(texture, rect, rect)
+	var mouse_position := get_local_mouse_position()
+	var chunk_coords := local_to_chunk(mouse_position)
+	draw_rect(Rect2(chunk_coords * Chunk.SIZE, Chunk.SIZE), Color.WHITE, false)
+	draw_string(Main.font, chunk_coords * Chunk.SIZE, str(chunk_coords, ": ", get_chunk(chunk_coords)), HORIZONTAL_ALIGNMENT_LEFT, -1, 10)
 
+var process_rect: Rect2i
 func _physics_process(_delta):
-	if Main.chunks_dir != null:
-		var process_rect := get_process_rect()
-		for y in IS.column(process_rect):
-			for x in IS.row(process_rect):
-				var coords := Vector2i(x, y)
-				if not has_chunk(coords):
-					chunks[coords] = Chunk.new()
+	process_rect = get_process_rect()
+	for points in IS.clip_rects(process_rect, previous_process_rect).map(IS.rect2i_to_points):
+		for coords in points:
+			if not get_chunk(coords) == null: continue
+			var chunk_operation := ChunkOperation.new()
+			chunk_operation.coords = coords
+			chunk_operation.type = ChunkOperation.Type.LOAD
+			chunk_operations.push_back(chunk_operation)
+			#chunk_operations[coords] = Operations.LOAD
+		#load_coords.append_array(coords)
+	for points in IS.clip_rects(previous_process_rect, process_rect).map(IS.rect2i_to_points):
+		for coords in points:
+			if not get_chunk(coords) != null: continue
+			var chunk_operation := ChunkOperation.new()
+			chunk_operation.coords = coords
+			chunk_operation.type = ChunkOperation.Type.SAVE
+			chunk_operations.push_back(chunk_operation)
+			#chunk_operations[coords] = Operations.SAVE
+		#save_coords.append_array(coords)
+	previous_process_rect = process_rect
+	if not chunk_operations.is_empty() and (operation_task == 0 or WorkerThreadPool.is_task_completed(operation_task)):
+		operation_task = WorkerThreadPool.add_task(func():
+			while true:
+				var chunk_operation := chunk_operations.pop_back() as ChunkOperation
+				if chunk_operation == null: return
+				if chunk_operation.type == ChunkOperation.Type.LOAD:
+					load_chunk(chunk_operation.coords)
+				elif chunk_operation.type == ChunkOperation.Type.SAVE:
+					save_chunk(chunk_operation.coords)
+		)
+	if Input.is_action_just_pressed("ui_accept"):
+		print("CHUNK SIZE: ", chunks.size())
+		print("OPERATIONS: ", chunk_operations.size())
+
+func can_load(coords: Vector2i) -> bool:
+	return get_chunk(coords) == null and process_rect.has_point(coords)
+
+func can_save(coords: Vector2i) -> bool:
+	var chunk := get_chunk(coords)
+	return chunk != null and chunk.modified and not process_rect.has_point(coords)
+
+func load_chunk(coords: Vector2i) -> void:
+	if not can_load(coords):
+		print("Chunk %s stop loading" % coords)
+		return
+	var path := PixelMap.get_chunk_path(coords)
+	var chunk := Chunk.deserialize(FileAccess.get_file_as_bytes(path))
+	if not can_load(coords):
+		print("Chunk %s stop loading caused by unload" % coords)
+		return
+	chunks[coords] = chunk
+
+func save_chunk(coords: Vector2i) -> void:
+	if not can_save(coords):
+		print("Chunk %s stop saving" % coords)
+		return
+	var path := PixelMap.get_chunk_path(coords)
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null: return
+	var chunk := get_chunk(coords)
+	file.store_buffer(chunk.serialize())
+	if not can_save(coords):
+		print("Chunk %s stop saving caused by load" % coords)
+		return
+	chunks.erase(coords)
+
+func close_requested():
+	process_rect = Rect2i()
+	for coords in chunks.keys():
+		save_chunk(coords)
