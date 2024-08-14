@@ -153,19 +153,23 @@ func prepare_uniform_set():
 	)
 
 func prepare_compute_list():
+	var render_rect := get_render_rect()
 	var compute_list := rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
 	rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
-	rd.compute_list_dispatch(compute_list, render_extents.x, render_extents.y, 1)
+	#print(render_rect.size.x, ", ", render_rect.size.y)
+	rd.compute_list_dispatch(compute_list, render_rect.size.x, render_rect.size.y, 1)
 	rd.compute_list_end()
 
 func _process(_delta):
 	var render_rect := get_render_rect()
 	var data := PackedInt32Array([
+		render_extents.x, render_extents.y,
 		render_rect.position.x, render_rect.position.y,
-		render_rect.size.x, render_rect.size.y,
 		Time.get_ticks_msec() / (1000.0 / 60.0)
 	]).to_byte_array()
+	print(render_extents, ", ", render_rect)
+	print(IS.vector2i_posmodv(Vector2i(-5,-3),Vector2i(10,7)))
 	rd.buffer_update(buf_map, 0, 16, data)
 	for coords in IS.rect2i_to_points(render_rect):
 		var chunk := get_chunk(coords)
@@ -174,6 +178,7 @@ func _process(_delta):
 		var render_coords := IS.vector2i_posmodv(coords, render_extents)
 		var render_index := render_coords.y * render_extents.x + render_coords.x
 		rd.buffer_update(buf_chunks, render_index * size, size, bytes)
+		if Input.is_action_just_pressed("ui_accept"): print(coords, render_coords, render_index)
 	prepare_compute_list()
 	queue_redraw()
 
@@ -183,7 +188,9 @@ func _draw():
 	var mouse_position := get_local_mouse_position()
 	var chunk_coords := local_to_chunk(mouse_position)
 	draw_rect(Rect2(chunk_coords * Chunk.SIZE, Chunk.SIZE), Color.WHITE, false)
-	draw_string(Main.font, chunk_coords * Chunk.SIZE, str(chunk_coords, ": ", get_chunk(chunk_coords)), HORIZONTAL_ALIGNMENT_LEFT, -1, 10)
+	var render_coords := IS.vector2i_posmodv(chunk_coords, render_extents)
+	var render_index := render_coords.y * render_extents.x + render_coords.x
+	draw_string(Main.font, chunk_coords * Chunk.SIZE, str(chunk_coords, ", ", render_coords, render_index, ": ", get_chunk(chunk_coords)), HORIZONTAL_ALIGNMENT_LEFT, -1, 10)
 
 var process_rect: Rect2i
 func _physics_process(_delta):
@@ -230,18 +237,18 @@ func can_save(coords: Vector2i) -> bool:
 
 func load_chunk(coords: Vector2i) -> void:
 	if not can_load(coords):
-		print("Chunk %s stop loading" % coords)
+		#print("Chunk %s stop loading" % coords)
 		return
 	var path := PixelMap.get_chunk_path(coords)
 	var chunk := Chunk.deserialize(FileAccess.get_file_as_bytes(path))
 	if not can_load(coords):
-		print("Chunk %s stop loading caused by unload" % coords)
+		#print("Chunk %s stop loading caused by unload" % coords)
 		return
 	chunks[coords] = chunk
 
 func save_chunk(coords: Vector2i) -> void:
 	if not can_save(coords):
-		print("Chunk %s stop saving" % coords)
+		#print("Chunk %s stop saving" % coords)
 		return
 	var path := PixelMap.get_chunk_path(coords)
 	var file := FileAccess.open(path, FileAccess.WRITE)
@@ -249,7 +256,7 @@ func save_chunk(coords: Vector2i) -> void:
 	var chunk := get_chunk(coords)
 	file.store_buffer(chunk.serialize())
 	if not can_save(coords):
-		print("Chunk %s stop saving caused by load" % coords)
+		#print("Chunk %s stop saving caused by load" % coords)
 		return
 	chunks.erase(coords)
 

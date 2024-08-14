@@ -24,4 +24,5 @@ script = ExtResource("4_gk3bw")
 zoom = Vector2(4, 4)
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
+visible = false
 texture = ExtResource("5_or4wh")
