@@ -11,7 +11,7 @@ var modified_time := 1
 var shape_updated_time := 0
 var area_owner := -1
 var body_owner := -1
-var overlap_count: int
+var overlap_count := 0
 
 static func _static_init():
 	NULL_BYTES.resize(SIZE.x * SIZE.y * TILE_SIZE * 4)

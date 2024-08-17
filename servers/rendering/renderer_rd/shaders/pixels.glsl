@@ -40,10 +40,10 @@ void main() {
 	ivec2 quadrantCoords = quadrantPosition + ivec2(gl_WorkGroupID.xy);
 	uvec2 quadrantCoordsRender = uvec2(mod(quadrantCoords, quadrantExtents));
 	uint quadrantIndexRender = quadrantCoordsRender.y * quadrantExtents.x + quadrantCoordsRender.x;
-	Quadrant quadrant = quadrants[quadrantIndexRender];
+	//Quadrant quadrant = quadrants[quadrantIndexRender];
 	ivec2 cellCoords = quadrantCoords * ivec2(QUADRANT_SIZE) + ivec2(gl_LocalInvocationID.xy);
-	ivec2 cellCoordsRender = ivec2(mod(cellCoords, quadrantExtents * QUADRANT_SIZE));
-	Cell cell = quadrant.cells[gl_LocalInvocationID.y][gl_LocalInvocationID.x];
+	ivec2 cellCoordsRender = ivec2(mod(cellCoords, quadrantExtents * QUADRANT_SIZE));//ivec2(quadrantCoordsRender * QUADRANT_SIZE + gl_WorkGroupID.xy);
+	Cell cell = quadrants[quadrantIndexRender].cells[gl_LocalInvocationID.y][gl_LocalInvocationID.x];
 	Pixel pixel = pixels[cell.pixel_id];
 	pixel = pixels[cell.pixel_id + time % pixel.frames];
 	ivec2 uv = ivec2(pixel.uvPosition + cellCoords % pixel.uvSize);

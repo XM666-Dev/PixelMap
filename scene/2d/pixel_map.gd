@@ -165,7 +165,7 @@ func _process(_delta):
 	var data := PackedInt32Array([
 		render_extents.x, render_extents.y,
 		render_rect.position.x, render_rect.position.y,
-		Time.get_ticks_msec() / (1000.0 / 60.0)
+		Main.time
 	]).to_byte_array()
 	rd.buffer_update(buf_map, 0, 16, data)
 	for coords in IS.rect2i_to_points(render_rect):
@@ -325,14 +325,14 @@ func chunk_update_shape(chunk: Chunk):
 		shape.points = polygon
 		body.shape_owner_add_shape(chunk.body_owner, shape)
 
-func _body_shape_entered(_body_rid, body, _body_shape_index, local_shape_index):
+func _body_shape_entered(_body_rid, _body, _body_shape_index, local_shape_index):
 	var shape_owner := area.shape_find_owner(local_shape_index)
 	var chunk := area.shape_owner_get_owner(shape_owner) as Chunk
 	if chunk == null: return
 	chunk.overlap_count += 1
 	chunk_update_shape(chunk)
 
-func _body_shape_exited(_body_rid, body, _body_shape_index, local_shape_index):
+func _body_shape_exited(_body_rid, _body, _body_shape_index, local_shape_index):
 	var shape_owner := area.shape_find_owner(local_shape_index)
 	var chunk := area.shape_owner_get_owner(shape_owner) as Chunk
 	if chunk == null: return
