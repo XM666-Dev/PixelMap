@@ -8,6 +8,8 @@ class_name PixelSet extends Resource
 @export var data: PackedByteArray
 @export var texture: ImageTexture
 
+var id_pixels: Array[Pixel]
+
 func _init():
 	connect(&"changed", changed)
 
@@ -22,6 +24,8 @@ func changed():
 	var i := 0
 	for pixel in pixels:
 		pixel.id = i
+		id_pixels.resize(i + 1)
+		id_pixels[i] = pixel
 		var size := pixel.textures.size()
 		for j in size:
 			ints.push_back(int(atlas.atlas_textures[i].region.position.x))

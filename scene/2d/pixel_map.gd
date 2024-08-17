@@ -3,16 +3,15 @@ class_name PixelMap extends Node2D
 @export var pixel_set: PixelSet
 var render_extents: Vector2i
 var texture := Texture2DRD.new()
+
 @export var process_extents: Vector2i
 var previous_process_rect: Rect2i
 var chunk_operations: Array[ChunkOperation]
 var operation_task := 0
 var chunks: Dictionary
-#var operation_coords: Array[Vector2i]
-#var load_coords: Array[Vector2i]
-#var save_coords: Array[Vector2i]
-#var load_task := 0
-#var save_task := 0
+
+@onready var area := $Area2D as Area2D
+@onready var body := $StaticBody2D as StaticBody2D
 
 class ChunkOperation:
 	var coords: Vector2i
@@ -82,7 +81,8 @@ func _ready():
 	prepare_chunks()
 	prepare_uniform_set()
 	var tree := get_tree()
-	tree.root.connect("close_requested", close_requested)
+	tree.root.connect("close_requested", _close_requested)
+	area.position = Chunk.SIZE / 2
 
 static func prepare_shader():
 	var shader_file := preload("res://servers/rendering/renderer_rd/shaders/pixels.glsl")
@@ -157,7 +157,6 @@ func prepare_compute_list():
 	var compute_list := rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
 	rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
-	#print(render_rect.size.x, ", ", render_rect.size.y)
 	rd.compute_list_dispatch(compute_list, render_rect.size.x, render_rect.size.y, 1)
 	rd.compute_list_end()
 
@@ -168,8 +167,6 @@ func _process(_delta):
 		render_rect.position.x, render_rect.position.y,
 		Time.get_ticks_msec() / (1000.0 / 60.0)
 	]).to_byte_array()
-	print(render_extents, ", ", render_rect)
-	print(IS.vector2i_posmodv(Vector2i(-5,-3),Vector2i(10,7)))
 	rd.buffer_update(buf_map, 0, 16, data)
 	for coords in IS.rect2i_to_points(render_rect):
 		var chunk := get_chunk(coords)
@@ -178,42 +175,65 @@ func _process(_delta):
 		var render_coords := IS.vector2i_posmodv(coords, render_extents)
 		var render_index := render_coords.y * render_extents.x + render_coords.x
 		rd.buffer_update(buf_chunks, render_index * size, size, bytes)
-		if Input.is_action_just_pressed("ui_accept"): print(coords, render_coords, render_index)
 	prepare_compute_list()
 	queue_redraw()
 
 func _draw():
 	var rect := IS.get_viewport_rect_global(self)
 	draw_texture_rect_region(texture, rect, rect)
-	var mouse_position := get_local_mouse_position()
-	var chunk_coords := local_to_chunk(mouse_position)
-	draw_rect(Rect2(chunk_coords * Chunk.SIZE, Chunk.SIZE), Color.WHITE, false)
-	var render_coords := IS.vector2i_posmodv(chunk_coords, render_extents)
-	var render_index := render_coords.y * render_extents.x + render_coords.x
-	draw_string(Main.font, chunk_coords * Chunk.SIZE, str(chunk_coords, ", ", render_coords, render_index, ": ", get_chunk(chunk_coords)), HORIZONTAL_ALIGNMENT_LEFT, -1, 10)
 
-var process_rect: Rect2i
+	#var draw_rect := get_render_rect().intersection(get_process_rect())
+	#for coords in IS.rect2i_to_points(draw_rect):
+		#var chunk := get_chunk(coords)
+		#if chunk == null: continue
+		#draw_set_transform_matrix(area.shape_owner_get_transform(chunk.area_owner))
+		#if chunk.overlap_count > 0:
+			#draw_rect(Rect2(Vector2(), area.shape_owner_get_shape(chunk.area_owner, 0).size), Color(Color.BLUE, 0.1))
+			#draw_rect(Rect2(Vector2(), area.shape_owner_get_shape(chunk.area_owner, 0).size), Color(Color.BLUE, 0.1), false)
+		#elif chunk.area_owner == -1:
+			#print(area.shape_owner_get_shape_count(chunk.area_owner), area.shape_owner_get_shape(chunk.area_owner, 0))
+			#draw_rect(Rect2(Vector2(), area.shape_owner_get_shape(chunk.area_owner, 0).size), Color(Color.GREEN, 0.1))
+			#draw_rect(Rect2(Vector2(), area.shape_owner_get_shape(chunk.area_owner, 0).size), Color(Color.GREEN, 0.1), false)
+		#elif area.shape_owner_get_shape_count(chunk.area_owner) > 0:
+			#draw_rect(Rect2(Vector2(), area.shape_owner_get_shape(chunk.area_owner, 0).size), Color(Color.RED, 0.1))
+			#draw_rect(Rect2(Vector2(), area.shape_owner_get_shape(chunk.area_owner, 0).size), Color(Color.RED, 0.1), false)
+		#else:
+			#draw_rect(Rect2(Vector2(), Chunk.SIZE), Color(Color.YELLOW, 0.1))
+			#draw_rect(Rect2(Vector2(), Chunk.SIZE), Color(Color.YELLOW, 0.1), false)
+		#if chunk.body_owner == -1: continue
+		#draw_set_transform_matrix(body.shape_owner_get_transform(chunk.body_owner))
+		#for i in body.shape_owner_get_shape_count(chunk.body_owner):
+			#var points := body.shape_owner_get_shape(chunk.body_owner, i).points as PackedVector2Array
+			#points.push_back(points[0])
+			#draw_polyline(points, Color.WHITE)
+
+	#draw_set_transform(Vector2.ZERO)
+	#var mouse_position := get_local_mouse_position()
+	#var chunk_coords := local_to_chunk(mouse_position)
+	#draw_rect(Rect2(chunk_coords * Chunk.SIZE, Chunk.SIZE), Color.WHITE, false)
+	#var render_coords := IS.vector2i_posmodv(chunk_coords, render_extents)
+	#var render_index := render_coords.y * render_extents.x + render_coords.x
+	#draw_string(Main.font, chunk_coords * Chunk.SIZE, str(chunk_coords, ", ", render_coords, render_index, ": ", get_chunk(chunk_coords)), HORIZONTAL_ALIGNMENT_LEFT, -1, 10)
+
 func _physics_process(_delta):
-	process_rect = get_process_rect()
-	for points in IS.clip_rects(process_rect, previous_process_rect).map(IS.rect2i_to_points):
+	var process_rect := get_process_rect()
+	var load_rects := IS.clip_rects(process_rect, previous_process_rect).map(IS.rect2i_to_points)
+	var save_rects := IS.clip_rects(previous_process_rect, process_rect).map(IS.rect2i_to_points)
+	previous_process_rect = process_rect
+	for points in load_rects:
 		for coords in points:
-			if not get_chunk(coords) == null: continue
+			if not can_load(coords): continue
 			var chunk_operation := ChunkOperation.new()
 			chunk_operation.coords = coords
 			chunk_operation.type = ChunkOperation.Type.LOAD
 			chunk_operations.push_back(chunk_operation)
-			#chunk_operations[coords] = Operations.LOAD
-		#load_coords.append_array(coords)
-	for points in IS.clip_rects(previous_process_rect, process_rect).map(IS.rect2i_to_points):
+	for points in save_rects:
 		for coords in points:
-			if not get_chunk(coords) != null: continue
+			if not can_save(coords): continue
 			var chunk_operation := ChunkOperation.new()
 			chunk_operation.coords = coords
 			chunk_operation.type = ChunkOperation.Type.SAVE
 			chunk_operations.push_back(chunk_operation)
-			#chunk_operations[coords] = Operations.SAVE
-		#save_coords.append_array(coords)
-	previous_process_rect = process_rect
 	if not chunk_operations.is_empty() and (operation_task == 0 or WorkerThreadPool.is_task_completed(operation_task)):
 		operation_task = WorkerThreadPool.add_task(func():
 			while true:
@@ -224,16 +244,23 @@ func _physics_process(_delta):
 				elif chunk_operation.type == ChunkOperation.Type.SAVE:
 					save_chunk(chunk_operation.coords)
 		)
+
+	for coords in IS.rect2i_to_points(process_rect):
+		var chunk := get_chunk(coords)
+		if chunk == null or chunk.overlap_count == 0: continue
+		chunk_update_shape(chunk)
+
 	if Input.is_action_just_pressed("ui_accept"):
 		print("CHUNK SIZE: ", chunks.size())
 		print("OPERATIONS: ", chunk_operations.size())
 
 func can_load(coords: Vector2i) -> bool:
-	return get_chunk(coords) == null and process_rect.has_point(coords)
+	var chunk := get_chunk(coords)
+	return chunk == null and previous_process_rect.has_point(coords)
 
 func can_save(coords: Vector2i) -> bool:
 	var chunk := get_chunk(coords)
-	return chunk != null and chunk.modified and not process_rect.has_point(coords)
+	return chunk != null and not previous_process_rect.has_point(coords) and chunk.modified_time != 1
 
 func load_chunk(coords: Vector2i) -> void:
 	if not can_load(coords):
@@ -245,6 +272,13 @@ func load_chunk(coords: Vector2i) -> void:
 		#print("Chunk %s stop loading caused by unload" % coords)
 		return
 	chunks[coords] = chunk
+
+	chunk.coords = coords
+	chunk.area_owner = area.create_shape_owner(chunk)
+	var shape = RectangleShape2D.new()
+	shape.size = Chunk.SIZE
+	area.shape_owner_add_shape(chunk.area_owner, shape)
+	area.shape_owner_set_transform(chunk.area_owner, Transform2D(0, coords * Chunk.SIZE))
 
 func save_chunk(coords: Vector2i) -> void:
 	if not can_save(coords):
@@ -260,7 +294,46 @@ func save_chunk(coords: Vector2i) -> void:
 		return
 	chunks.erase(coords)
 
-func close_requested():
-	process_rect = Rect2i()
+	area.remove_shape_owner(chunk.area_owner)
+	if chunk.body_owner != -1:
+		body.remove_shape_owner(chunk.body_owner)
+
+func _close_requested():
+	previous_process_rect = Rect2i()
 	for coords in chunks.keys():
 		save_chunk(coords)
+
+func chunk_get_bit_map(chunk: Chunk) -> BitMap:
+	var bit_map := BitMap.new()
+	bit_map.create(Chunk.SIZE)
+	for coords in IS.rect2i_to_points(Rect2i(Vector2i.ZERO, Chunk.SIZE)):
+		bit_map.set_bitv(coords, pixel_set.id_pixels[chunk.get_cell_pixel(coords)].state == Pixel.States.SOLID)
+	return bit_map
+
+func chunk_update_shape(chunk: Chunk):
+	if chunk.shape_updated_time == chunk.modified_time: return
+	chunk.shape_updated_time = chunk.modified_time
+	if chunk.body_owner == -1:
+		chunk.body_owner = body.create_shape_owner(chunk)
+		body.shape_owner_set_transform(chunk.body_owner, Transform2D(0, chunk.coords * Chunk.SIZE))
+	else:
+		body.shape_owner_clear_shapes(chunk.body_owner)
+	var bit_map := chunk_get_bit_map(chunk)
+	var polygons := bit_map.opaque_to_polygons(Rect2i(Vector2i.ZERO, Chunk.SIZE))
+	for polygon in polygons:
+		var shape := ConvexPolygonShape2D.new()
+		shape.points = polygon
+		body.shape_owner_add_shape(chunk.body_owner, shape)
+
+func _body_shape_entered(_body_rid, body, _body_shape_index, local_shape_index):
+	var shape_owner := area.shape_find_owner(local_shape_index)
+	var chunk := area.shape_owner_get_owner(shape_owner) as Chunk
+	if chunk == null: return
+	chunk.overlap_count += 1
+	chunk_update_shape(chunk)
+
+func _body_shape_exited(_body_rid, body, _body_shape_index, local_shape_index):
+	var shape_owner := area.shape_find_owner(local_shape_index)
+	var chunk := area.shape_owner_get_owner(shape_owner) as Chunk
+	if chunk == null: return
+	chunk.overlap_count -= 1

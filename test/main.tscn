@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3 uid="uid://d0p6wkleyo0og"]
+[gd_scene load_steps=7 format=3 uid="uid://d0p6wkleyo0og"]
 
 [ext_resource type="Script" path="res://test/main.gd" id="1_yldnw"]
 [ext_resource type="Script" path="res://scene/2d/pixel_map.gd" id="2_uhw1h"]
 [ext_resource type="Resource" uid="uid://be4yagi61ovg5" path="res://test/resources/pixel_set.tres" id="3_q1jr4"]
 [ext_resource type="Script" path="res://test/Player.gd" id="4_gk3bw"]
-[ext_resource type="Texture2D" uid="uid://djfl0l2i4yua5" path="res://icon.svg" id="5_or4wh"]
+[ext_resource type="Script" path="res://test/Cursor.gd" id="5_il10q"]
+[ext_resource type="PackedScene" uid="uid://bbwes6f33g6ik" path="res://test/scene/rigid_body_2d.tscn" id="6_nlsny"]
 
 [node name="Main" type="Node2D"]
 texture_filter = 1
@@ -17,12 +18,25 @@ script = ExtResource("2_uhw1h")
 pixel_set = ExtResource("3_q1jr4")
 process_extents = Vector2i(16, 16)
 
+[node name="Area2D" type="Area2D" parent="PixelMap"]
+collision_priority = 2.0
+priority = 2
+
+[node name="StaticBody2D" type="StaticBody2D" parent="PixelMap"]
+collision_layer = 2
+
 [node name="Player" type="Node2D" parent="."]
+unique_name_in_owner = true
 script = ExtResource("4_gk3bw")
 
 [node name="Camera2D" type="Camera2D" parent="Player"]
 zoom = Vector2(4, 4)
 
-[node name="Sprite2D" type="Sprite2D" parent="."]
-visible = false
-texture = ExtResource("5_or4wh")
+[node name="Cursor" type="Node2D" parent="."]
+texture_repeat = 2
+script = ExtResource("5_il10q")
+
+[node name="RigidBody2D" parent="." instance=ExtResource("6_nlsny")]
+
+[connection signal="body_shape_entered" from="PixelMap/Area2D" to="PixelMap" method="_body_shape_entered"]
+[connection signal="body_shape_exited" from="PixelMap/Area2D" to="PixelMap" method="_body_shape_exited"]
