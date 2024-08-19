@@ -10,4 +10,4 @@ enum States {
 @export var name: StringName
 @export var textures: Array[Texture2D]
 @export var state: States
-var id: int
+@export_storage var id: int

@@ -5,16 +5,14 @@ class_name PixelSet extends Resource
 	set(_pixels):
 		pixels = _pixels
 		emit_changed()
-@export var data: PackedByteArray
-@export var texture: ImageTexture
-
-var id_pixels: Array[Pixel]
+@export_storage var data: PackedByteArray
+@export_storage var texture: ImageTexture
+@export_storage var indexed_pixels: Array[Pixel]
 
 func _init():
-	connect(&"changed", changed)
+	if Engine.is_editor_hint(): connect(&"changed", changed)
 
 func changed():
-	#if not Engine.is_editor_hint(): return
 	var textures := [] as Array[Texture2D]
 	for pixel in pixels:
 		for pixel_texture in pixel.textures:
@@ -24,8 +22,8 @@ func changed():
 	var i := 0
 	for pixel in pixels:
 		pixel.id = i
-		id_pixels.resize(i + 1)
-		id_pixels[i] = pixel
+		indexed_pixels.resize(i + 1)
+		indexed_pixels[i] = pixel
 		var size := pixel.textures.size()
 		for j in size:
 			ints.push_back(int(atlas.atlas_textures[i].region.position.x))

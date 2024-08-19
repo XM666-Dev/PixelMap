@@ -14,7 +14,7 @@ func _input(event):
 			draw_size = (draw_size - Vector2i.ONE).clamp(Vector2i.ONE, max_draw_size)
 		elif Input.is_key_pressed(KEY_ALT):
 			var camera := %Player/Camera2D as Camera2D
-			camera.zoom = (camera.zoom - Vector2(0.2, 0.2)).clamp(Vector2(4, 4), Vector2(16, 16))
+			camera.zoom = (camera.zoom - Vector2(0.2, 0.2)).clamp(Vector2(2, 2), Vector2(16, 16))
 		else:
 			pixel_index = (pixel_index - 1) % pixel_map.pixel_set.pixels.size()
 	if event.is_action_pressed("next"):
@@ -23,7 +23,7 @@ func _input(event):
 			draw_size = (draw_size + Vector2i.ONE).clamp(Vector2i.ONE, max_draw_size)
 		elif Input.is_key_pressed(KEY_ALT):
 			var camera := %Player/Camera2D as Camera2D
-			camera.zoom = (camera.zoom + Vector2(0.2, 0.2)).clamp(Vector2(4, 4), Vector2(16, 16))
+			camera.zoom = (camera.zoom + Vector2(0.2, 0.2)).clamp(Vector2(2, 2), Vector2(16, 16))
 		else:
 			pixel_index = (pixel_index + 1) % pixel_map.pixel_set.pixels.size()
 	if event.is_action("fire"):

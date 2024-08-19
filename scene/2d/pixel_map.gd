@@ -167,7 +167,7 @@ func _process(_delta):
 		render_rect.position.x, render_rect.position.y,
 		Main.time
 	]).to_byte_array()
-	rd.buffer_update(buf_map, 0, 16, data)
+	rd.buffer_update(buf_map, 0, data.size(), data)
 	for coords in IS.rect2i_to_points(render_rect):
 		var chunk := get_chunk(coords)
 		var bytes := chunk.data.to_byte_array() if chunk != null else Chunk.NULL_BYTES
@@ -260,7 +260,7 @@ func can_load(coords: Vector2i) -> bool:
 
 func can_save(coords: Vector2i) -> bool:
 	var chunk := get_chunk(coords)
-	return chunk != null and not previous_process_rect.has_point(coords) and chunk.modified_time != 1
+	return chunk != null and not previous_process_rect.has_point(coords)
 
 func load_chunk(coords: Vector2i) -> void:
 	if not can_load(coords):
@@ -284,11 +284,11 @@ func save_chunk(coords: Vector2i) -> void:
 	if not can_save(coords):
 		#print("Chunk %s stop saving" % coords)
 		return
-	var path := PixelMap.get_chunk_path(coords)
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if file == null: return
 	var chunk := get_chunk(coords)
-	file.store_buffer(chunk.serialize())
+	if chunk.modified_time != 1:
+		var path := PixelMap.get_chunk_path(coords)
+		var file := FileAccess.open(path, FileAccess.WRITE)
+		if file != null: file.store_buffer(chunk.serialize())
 	if not can_save(coords):
 		#print("Chunk %s stop saving caused by load" % coords)
 		return
@@ -307,7 +307,7 @@ func chunk_get_bit_map(chunk: Chunk) -> BitMap:
 	var bit_map := BitMap.new()
 	bit_map.create(Chunk.SIZE)
 	for coords in IS.rect2i_to_points(Rect2i(Vector2i.ZERO, Chunk.SIZE)):
-		bit_map.set_bitv(coords, pixel_set.id_pixels[chunk.get_cell_pixel(coords)].state == Pixel.States.SOLID)
+		bit_map.set_bitv(coords, pixel_set.indexed_pixels[chunk.get_cell_pixel(coords)].state == Pixel.States.SOLID)
 	return bit_map
 
 func chunk_update_shape(chunk: Chunk):
