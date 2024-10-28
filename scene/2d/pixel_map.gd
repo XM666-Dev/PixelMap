@@ -6,21 +6,16 @@ var texture := Texture2DRD.new()
 
 @export var process_extents: Vector2i
 var previous_process_rect: Rect2i
-var chunk_operations: Array[ChunkOperation]
-var operation_task := 0
+var operations: Array[Array] = [[], []]
+var thread := Thread.new()
+var mutex := Mutex.new()
+var task: int
 var chunks: Dictionary
 
 @onready var area := $Area2D as Area2D
 @onready var body := $StaticBody2D as StaticBody2D
 
-class ChunkOperation:
-	var coords: Vector2i
-	var type: Type
-
-	enum Type {
-		LOAD,
-		SAVE
-	}
+signal operate
 
 static var rd := RenderingServer.get_rendering_device()
 static var shader: RID
@@ -80,9 +75,20 @@ func _ready():
 	prepare_map()
 	prepare_chunks()
 	prepare_uniform_set()
+	
 	var tree := get_tree()
 	tree.root.connect("close_requested", _close_requested)
 	area.position = Chunk.SIZE / 2
+	
+	thread.start(func():
+		while true:
+			mutex.lock()
+			for callables: Array[Callable] in operations:
+				while true:
+					var callable: Variant = callables.pop_back()
+					if callable == null: break
+					callable.call()
+	)
 
 static func prepare_shader():
 	var shader_file := preload("res://servers/rendering/renderer_rd/shaders/pixels.glsl")
@@ -187,7 +193,7 @@ func _draw():
 		#var chunk := get_chunk(coords)
 		#if chunk == null: continue
 		#draw_set_transform_matrix(area.shape_owner_get_transform(chunk.area_owner))
-		#if chunk.overlap_count > 0:
+		#if chunk.overlapping_count > 0:
 			#draw_rect(Rect2(Vector2(), area.shape_owner_get_shape(chunk.area_owner, 0).size), Color(Color.BLUE, 0.1))
 			#draw_rect(Rect2(Vector2(), area.shape_owner_get_shape(chunk.area_owner, 0).size), Color(Color.BLUE, 0.1), false)
 		#elif chunk.area_owner == -1:
@@ -223,36 +229,50 @@ func _physics_process(_delta):
 	for points in load_rects:
 		for coords in points:
 			if not can_load(coords): continue
-			var chunk_operation := ChunkOperation.new()
-			chunk_operation.coords = coords
-			chunk_operation.type = ChunkOperation.Type.LOAD
-			chunk_operations.push_back(chunk_operation)
+			#var chunk_operation := ChunkOperation.new()
+			#chunk_operation.coords = coords
+			#chunk_operation.type = ChunkOperation.Type.LOAD
+			#chunk_operations.push_back(chunk_operation)
+			operations[0].push_back(load_chunk.bind(coords))
 	for points in save_rects:
 		for coords in points:
 			if not can_save(coords): continue
-			var chunk_operation := ChunkOperation.new()
-			chunk_operation.coords = coords
-			chunk_operation.type = ChunkOperation.Type.SAVE
-			chunk_operations.push_back(chunk_operation)
-	if not chunk_operations.is_empty() and (operation_task == 0 or WorkerThreadPool.is_task_completed(operation_task)):
-		operation_task = WorkerThreadPool.add_task(func():
-			while true:
-				var chunk_operation := chunk_operations.pop_back() as ChunkOperation
-				if chunk_operation == null: return
-				if chunk_operation.type == ChunkOperation.Type.LOAD:
-					load_chunk(chunk_operation.coords)
-				elif chunk_operation.type == ChunkOperation.Type.SAVE:
-					save_chunk(chunk_operation.coords)
-		)
+			#var chunk_operation := ChunkOperation.new()
+			#chunk_operation.coords = coords
+			#chunk_operation.type = ChunkOperation.Type.SAVE
+			#chunk_operations.push_back(chunk_operation)
+			operations[1].push_back(save_chunk.bind(coords))
+	mutex.unlock()
+	#if not chunk_operations.is_empty() and (operation_task == 0 or WorkerThreadPool.is_task_completed(operation_task)):
+		#operation_task = WorkerThreadPool.add_task(func():
+			#while true:
+				#var chunk_operation := chunk_operations.pop_back() as ChunkOperation
+				#if chunk_operation == null: return
+				#if chunk_operation.type == ChunkOperation.Type.LOAD:
+					#load_chunk(chunk_operation.coords)
+				#elif chunk_operation.type == ChunkOperation.Type.SAVE:
+					#save_chunk(chunk_operation.coords)
+		#)
+	operate.emit.call_deferred()
+	#if task == 0:
+		#task = WorkerThreadPool.add_task(func():
+			#while true:
+				#await get_tree().create_timer(1).timeout
+				#for callables: Array[Callable] in operations:
+					#while true:
+						#var callable: Variant = callables.pop_back()
+						#if callable == null: break
+						#callable.call()
+		#)
 
 	for coords in IS.rect2i_to_points(process_rect):
 		var chunk := get_chunk(coords)
-		if chunk == null or chunk.overlap_count == 0: continue
+		if chunk == null or chunk.overlapping_count == 0: continue
 		chunk_update_shape(chunk)
 
 	if Input.is_action_just_pressed("ui_accept"):
 		print("CHUNK SIZE: ", chunks.size())
-		print("OPERATIONS: ", chunk_operations.size())
+		print("OPERATIONS: ", operations.size())
 
 func can_load(coords: Vector2i) -> bool:
 	var chunk := get_chunk(coords)
@@ -329,11 +349,11 @@ func _body_shape_entered(_body_rid, _body, _body_shape_index, local_shape_index)
 	var shape_owner := area.shape_find_owner(local_shape_index)
 	var chunk := area.shape_owner_get_owner(shape_owner) as Chunk
 	if chunk == null: return
-	chunk.overlap_count += 1
+	chunk.overlapping_count += 1
 	chunk_update_shape(chunk)
 
 func _body_shape_exited(_body_rid, _body, _body_shape_index, local_shape_index):
 	var shape_owner := area.shape_find_owner(local_shape_index)
 	var chunk := area.shape_owner_get_owner(shape_owner) as Chunk
 	if chunk == null: return
-	chunk.overlap_count -= 1
+	chunk.overlapping_count -= 1
