@@ -6,12 +6,9 @@ const TILE_SIZE := 1
 static var NULL_BYTES := PackedByteArray()
 
 var data: PackedInt32Array
-var coords: Vector2i
 var modified_time := 1
-var shape_updated_time := 0
-var area_owner := -1
-var body_owner := -1
-var overlapping_count := 0
+var shaped_time := 0
+var shapes: PackedInt32Array
 
 static func _static_init():
 	NULL_BYTES.resize(SIZE.x * SIZE.y * TILE_SIZE * 4)

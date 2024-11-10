@@ -7,15 +7,20 @@ var texture := Texture2DRD.new()
 @export var process_extents: Vector2i
 var previous_process_rect: Rect2i
 var operations: Array[Array] = [[], []]
-var thread := Thread.new()
-var mutex := Mutex.new()
-var task: int
+var waited: bool
+var semaphore := Semaphore.new()
+var task := WorkerThreadPool.add_task(func():
+	while true:
+		for callables: Array[Callable] in operations:
+			var callable = callables.pop_back()
+			if callable == null or callable.is_null(): continue
+			callable.call()
+			break
+)
 var chunks: Dictionary
 
-@onready var area := $Area2D as Area2D
-@onready var body := $StaticBody2D as StaticBody2D
-
-signal operate
+var body := PhysicsServer2D.body_create()
+var null_shapes := PackedInt32Array()
 
 static var rd := RenderingServer.get_rendering_device()
 static var shader: RID
@@ -26,7 +31,6 @@ var buf_pixel_set: RID
 var img_map: RID
 var buf_map: RID
 var buf_chunks: RID
-
 var uniform_set: RID
 
 func get_size() -> Vector2i:
@@ -75,20 +79,11 @@ func _ready():
 	prepare_map()
 	prepare_chunks()
 	prepare_uniform_set()
-	
-	var tree := get_tree()
-	tree.root.connect("close_requested", _close_requested)
-	area.position = Chunk.SIZE / 2
-	
-	thread.start(func():
-		while true:
-			mutex.lock()
-			for callables: Array[Callable] in operations:
-				while true:
-					var callable: Variant = callables.pop_back()
-					if callable == null: break
-					callable.call()
-	)
+
+	get_tree().root.connect("close_requested", _close_requested)
+
+	PhysicsServer2D.body_set_space(body, get_world_2d().space)
+	PhysicsServer2D.body_set_mode(body, PhysicsServer2D.BODY_MODE_STATIC)
 
 static func prepare_shader():
 	var shader_file := preload("res://servers/rendering/renderer_rd/shaders/pixels.glsl")
@@ -188,38 +183,33 @@ func _draw():
 	var rect := IS.get_viewport_rect_global(self)
 	draw_texture_rect_region(texture, rect, rect)
 
-	#var draw_rect := get_render_rect().intersection(get_process_rect())
-	#for coords in IS.rect2i_to_points(draw_rect):
-		#var chunk := get_chunk(coords)
-		#if chunk == null: continue
-		#draw_set_transform_matrix(area.shape_owner_get_transform(chunk.area_owner))
-		#if chunk.overlapping_count > 0:
-			#draw_rect(Rect2(Vector2(), area.shape_owner_get_shape(chunk.area_owner, 0).size), Color(Color.BLUE, 0.1))
-			#draw_rect(Rect2(Vector2(), area.shape_owner_get_shape(chunk.area_owner, 0).size), Color(Color.BLUE, 0.1), false)
-		#elif chunk.area_owner == -1:
-			#print(area.shape_owner_get_shape_count(chunk.area_owner), area.shape_owner_get_shape(chunk.area_owner, 0))
-			#draw_rect(Rect2(Vector2(), area.shape_owner_get_shape(chunk.area_owner, 0).size), Color(Color.GREEN, 0.1))
-			#draw_rect(Rect2(Vector2(), area.shape_owner_get_shape(chunk.area_owner, 0).size), Color(Color.GREEN, 0.1), false)
-		#elif area.shape_owner_get_shape_count(chunk.area_owner) > 0:
-			#draw_rect(Rect2(Vector2(), area.shape_owner_get_shape(chunk.area_owner, 0).size), Color(Color.RED, 0.1))
-			#draw_rect(Rect2(Vector2(), area.shape_owner_get_shape(chunk.area_owner, 0).size), Color(Color.RED, 0.1), false)
-		#else:
-			#draw_rect(Rect2(Vector2(), Chunk.SIZE), Color(Color.YELLOW, 0.1))
-			#draw_rect(Rect2(Vector2(), Chunk.SIZE), Color(Color.YELLOW, 0.1), false)
-		#if chunk.body_owner == -1: continue
-		#draw_set_transform_matrix(body.shape_owner_get_transform(chunk.body_owner))
-		#for i in body.shape_owner_get_shape_count(chunk.body_owner):
-			#var points := body.shape_owner_get_shape(chunk.body_owner, i).points as PackedVector2Array
-			#points.push_back(points[0])
-			#draw_polyline(points, Color.WHITE)
-
-	#draw_set_transform(Vector2.ZERO)
-	#var mouse_position := get_local_mouse_position()
-	#var chunk_coords := local_to_chunk(mouse_position)
-	#draw_rect(Rect2(chunk_coords * Chunk.SIZE, Chunk.SIZE), Color.WHITE, false)
-	#var render_coords := IS.vector2i_posmodv(chunk_coords, render_extents)
-	#var render_index := render_coords.y * render_extents.x + render_coords.x
-	#draw_string(Main.font, chunk_coords * Chunk.SIZE, str(chunk_coords, ", ", render_coords, render_index, ": ", get_chunk(chunk_coords)), HORIZONTAL_ALIGNMENT_LEFT, -1, 10)
+	var render_rect := get_render_rect()
+	for coords in IS.rect2i_to_points(render_rect):
+		var chunk := get_chunk(coords)
+		if chunk == null: continue
+		#if Input.is_action_just_pressed("spawn"):
+			#shape_chunk(coords)
+		for shape in chunk.shapes:
+			draw_set_transform_matrix(PhysicsServer2D.body_get_shape_transform(body, shape))
+			var polygon_shape := PhysicsServer2D.body_get_shape(body, shape)
+			var polygon := PhysicsServer2D.shape_get_data(polygon_shape) as PackedVector2Array
+			draw_polygon(polygon, [Color(Color.WHITE, 0.2)])
+			polygon.push_back(polygon[0])
+			draw_polyline(polygon, Color.WHITE)
+	draw_set_transform(Vector2.ZERO)
+	var mouse_position := get_local_mouse_position()
+	var chunk_coords := local_to_chunk(mouse_position)
+	draw_rect(Rect2(chunk_coords * Chunk.SIZE, Chunk.SIZE), Color.WHITE, false)
+	var render_coords := IS.vector2i_posmodv(chunk_coords, render_extents)
+	var render_index := render_coords.y * render_extents.x + render_coords.x
+	draw_string(
+		Main.font,
+		chunk_coords * Chunk.SIZE,
+		"%s: %s" % [chunk_coords, get_chunk(chunk_coords)],
+		0,
+		-1,
+		8
+	)
 
 func _physics_process(_delta):
 	var process_rect := get_process_rect()
@@ -229,46 +219,14 @@ func _physics_process(_delta):
 	for points in load_rects:
 		for coords in points:
 			if not can_load(coords): continue
-			#var chunk_operation := ChunkOperation.new()
-			#chunk_operation.coords = coords
-			#chunk_operation.type = ChunkOperation.Type.LOAD
-			#chunk_operations.push_back(chunk_operation)
 			operations[0].push_back(load_chunk.bind(coords))
 	for points in save_rects:
 		for coords in points:
 			if not can_save(coords): continue
-			#var chunk_operation := ChunkOperation.new()
-			#chunk_operation.coords = coords
-			#chunk_operation.type = ChunkOperation.Type.SAVE
-			#chunk_operations.push_back(chunk_operation)
 			operations[1].push_back(save_chunk.bind(coords))
-	mutex.unlock()
-	#if not chunk_operations.is_empty() and (operation_task == 0 or WorkerThreadPool.is_task_completed(operation_task)):
-		#operation_task = WorkerThreadPool.add_task(func():
-			#while true:
-				#var chunk_operation := chunk_operations.pop_back() as ChunkOperation
-				#if chunk_operation == null: return
-				#if chunk_operation.type == ChunkOperation.Type.LOAD:
-					#load_chunk(chunk_operation.coords)
-				#elif chunk_operation.type == ChunkOperation.Type.SAVE:
-					#save_chunk(chunk_operation.coords)
-		#)
-	operate.emit.call_deferred()
-	#if task == 0:
-		#task = WorkerThreadPool.add_task(func():
-			#while true:
-				#await get_tree().create_timer(1).timeout
-				#for callables: Array[Callable] in operations:
-					#while true:
-						#var callable: Variant = callables.pop_back()
-						#if callable == null: break
-						#callable.call()
-		#)
-
-	for coords in IS.rect2i_to_points(process_rect):
-		var chunk := get_chunk(coords)
-		if chunk == null or chunk.overlapping_count == 0: continue
-		chunk_update_shape(chunk)
+	if waited:
+		waited = false
+		semaphore.post()
 
 	if Input.is_action_just_pressed("ui_accept"):
 		print("CHUNK SIZE: ", chunks.size())
@@ -293,13 +251,6 @@ func load_chunk(coords: Vector2i) -> void:
 		return
 	chunks[coords] = chunk
 
-	chunk.coords = coords
-	chunk.area_owner = area.create_shape_owner(chunk)
-	var shape = RectangleShape2D.new()
-	shape.size = Chunk.SIZE
-	area.shape_owner_add_shape(chunk.area_owner, shape)
-	area.shape_owner_set_transform(chunk.area_owner, Transform2D(0, coords * Chunk.SIZE))
-
 func save_chunk(coords: Vector2i) -> void:
 	if not can_save(coords):
 		#print("Chunk %s stop saving" % coords)
@@ -314,9 +265,9 @@ func save_chunk(coords: Vector2i) -> void:
 		return
 	chunks.erase(coords)
 
-	area.remove_shape_owner(chunk.area_owner)
-	if chunk.body_owner != -1:
-		body.remove_shape_owner(chunk.body_owner)
+	for shape in chunk.shapes:
+		PhysicsServer2D.body_set_shape_disabled(body, shape, true)
+	null_shapes.append_array(chunk.shapes)
 
 func _close_requested():
 	previous_process_rect = Rect2i()
@@ -330,30 +281,31 @@ func chunk_get_bit_map(chunk: Chunk) -> BitMap:
 		bit_map.set_bitv(coords, pixel_set.indexed_pixels[chunk.get_cell_pixel(coords)].state == Pixel.States.SOLID)
 	return bit_map
 
-func chunk_update_shape(chunk: Chunk):
-	if chunk.shape_updated_time == chunk.modified_time: return
-	chunk.shape_updated_time = chunk.modified_time
-	if chunk.body_owner == -1:
-		chunk.body_owner = body.create_shape_owner(chunk)
-		body.shape_owner_set_transform(chunk.body_owner, Transform2D(0, chunk.coords * Chunk.SIZE))
-	else:
-		body.shape_owner_clear_shapes(chunk.body_owner)
+func shape_chunk(coords: Vector2i):
+	var chunk := get_chunk(coords)
+	if chunk == null or chunk.shaped_time == chunk.modified_time: return
+	chunk.shaped_time = chunk.modified_time
+
+	for shape in chunk.shapes:
+		PhysicsServer2D.body_set_shape_disabled(body, shape, true)
+	null_shapes.append_array(chunk.shapes)
+	chunk.shapes.clear()
+
 	var bit_map := chunk_get_bit_map(chunk)
 	var polygons := bit_map.opaque_to_polygons(Rect2i(Vector2i.ZERO, Chunk.SIZE))
 	for polygon in polygons:
-		var shape := ConvexPolygonShape2D.new()
-		shape.points = polygon
-		body.shape_owner_add_shape(chunk.body_owner, shape)
-
-func _body_shape_entered(_body_rid, _body, _body_shape_index, local_shape_index):
-	var shape_owner := area.shape_find_owner(local_shape_index)
-	var chunk := area.shape_owner_get_owner(shape_owner) as Chunk
-	if chunk == null: return
-	chunk.overlapping_count += 1
-	chunk_update_shape(chunk)
-
-func _body_shape_exited(_body_rid, _body, _body_shape_index, local_shape_index):
-	var shape_owner := area.shape_find_owner(local_shape_index)
-	var chunk := area.shape_owner_get_owner(shape_owner) as Chunk
-	if chunk == null: return
-	chunk.overlapping_count -= 1
+		for points in Geometry2D.decompose_polygon_in_convex(polygon):
+			var shape := PhysicsServer2D.convex_polygon_shape_create()
+			#polygon.reverse()
+			PhysicsServer2D.shape_set_data(shape, points)
+			var index: int
+			if null_shapes.is_empty():
+				index = PhysicsServer2D.body_get_shape_count(body)
+				PhysicsServer2D.body_add_shape(body, shape)
+			else:
+				index = null_shapes[-1]
+				null_shapes.remove_at(null_shapes.size() - 1)
+				PhysicsServer2D.body_set_shape(body, index, shape)
+				PhysicsServer2D.body_set_shape_disabled(body, index, false)
+			chunk.shapes.push_back(index)
+			PhysicsServer2D.body_set_shape_transform(body, index, Transform2D(0, coords * Chunk.SIZE))

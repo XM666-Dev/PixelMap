@@ -31,7 +31,7 @@ func _input(event):
 	if event.is_action_pressed("spawn"):
 		var rigid_body_scene := preload("res://test/scene/rigid_body_2d.tscn")
 		var rigid_body := rigid_body_scene.instantiate()
-		$"..".add_child(rigid_body)
+		Main.node.add_child(rigid_body)
 		rigid_body.position = get_global_mouse_position()
 
 func _physics_process(_delta):

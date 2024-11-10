@@ -31,4 +31,6 @@ script = ExtResource("5_il10q")
 
 [node name="RigidBody2D" parent="." instance=ExtResource("6_nlsny")]
 contact_monitor = true
-max_contacts_reported = 1
+max_contacts_reported = 21
+
+[connection signal="body_shape_entered" from="RigidBody2D" to="RigidBody2D" method="_on_body_shape_entered"]
