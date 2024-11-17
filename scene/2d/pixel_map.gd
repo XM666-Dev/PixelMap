@@ -7,17 +7,31 @@ var texture := Texture2DRD.new()
 @export var process_extents: Vector2i
 var previous_process_rect: Rect2i
 var operations: Array[Array] = [[], []]
-var waited: bool
-var semaphore := Semaphore.new()
 var task := WorkerThreadPool.add_task(func():
 	while true:
 		for callables: Array[Callable] in operations:
-			var callable = callables.pop_back()
-			if callable == null or callable.is_null(): continue
+			var i := 0
+			for c in callables:
+				if c.is_null(): break
+				i = i + 1
+			if i == 0: continue
+			i = i - 1
+			var callable := callables[i]
+			callables[i] = Callable()
 			callable.call()
 			break
 )
 var chunks: Dictionary
+
+static func push_back(callables: Array, callable: Callable):
+	var i := 0
+	for c in callables:
+		if c.is_null(): break
+		i = i + 1
+	if i == callables.size():
+		callables.push_back(callable)
+	else:
+		callables[i] = callable
 
 var body := PhysicsServer2D.body_create()
 var null_shapes := PackedInt32Array()
@@ -200,13 +214,13 @@ func _draw():
 	var mouse_position := get_local_mouse_position()
 	var chunk_coords := local_to_chunk(mouse_position)
 	draw_rect(Rect2(chunk_coords * Chunk.SIZE, Chunk.SIZE), Color.WHITE, false)
-	var render_coords := IS.vector2i_posmodv(chunk_coords, render_extents)
-	var render_index := render_coords.y * render_extents.x + render_coords.x
+	#var render_coords := IS.vector2i_posmodv(chunk_coords, render_extents)
+	#var render_index := render_coords.y * render_extents.x + render_coords.x
 	draw_string(
 		Main.font,
 		chunk_coords * Chunk.SIZE,
 		"%s: %s" % [chunk_coords, get_chunk(chunk_coords)],
-		0,
+		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
 		8
 	)
@@ -219,18 +233,20 @@ func _physics_process(_delta):
 	for points in load_rects:
 		for coords in points:
 			if not can_load(coords): continue
-			operations[0].push_back(load_chunk.bind(coords))
+			push_back(operations[0], load_chunk.bind(coords))
 	for points in save_rects:
 		for coords in points:
 			if not can_save(coords): continue
-			operations[1].push_back(save_chunk.bind(coords))
-	if waited:
-		waited = false
-		semaphore.post()
+			push_back(operations[1], save_chunk.bind(coords))
 
-	if Input.is_action_just_pressed("ui_accept"):
-		print("CHUNK SIZE: ", chunks.size())
-		print("OPERATIONS: ", operations.size())
+	if Input.is_action_just_pressed("ui_down"):
+		print("CHUNKS: %s" % chunks.size())
+		var count := 0
+		for callables: Array[Callable] in operations:
+			for callable in callables:
+				if callable.is_null(): break
+				count = count + 1
+		print("OPERATIONS: %s" % count)
 
 func can_load(coords: Vector2i) -> bool:
 	var chunk := get_chunk(coords)

@@ -30,5 +30,4 @@ texture_repeat = 2
 script = ExtResource("5_il10q")
 
 [node name="RigidBody2D" parent="." instance=ExtResource("6_nlsny")]
-contact_monitor = true
 max_contacts_reported = 1
