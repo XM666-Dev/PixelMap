@@ -31,8 +31,11 @@ func _input(event):
 	if event.is_action_pressed("spawn"):
 		var rigid_body_scene := preload("res://test/scene/rigid_body_2d.tscn")
 		var rigid_body := rigid_body_scene.instantiate()
-		Main.node.add_child(rigid_body)
+		%PixelMap.add_child(rigid_body)
 		rigid_body.position = get_global_mouse_position()
+
+		#for coords in %PixelMap.chunks:
+			#%PixelMap.force_save_chunk(coords)
 
 func _physics_process(_delta):
 	var pixel_map := %PixelMap as PixelMap

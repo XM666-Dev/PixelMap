@@ -6,24 +6,20 @@ var texture := Texture2DRD.new()
 
 @export var process_extents: Vector2i
 var previous_process_rect: Rect2i
-var operations: Array[Array] = [[], []]
-var task := WorkerThreadPool.add_task(func():
-	while true:
-		for callables: Array[Callable] in operations:
-			var i := 0
-			for c in callables:
-				if c.is_null(): break
-				i = i + 1
-			if i == 0: continue
-			i = i - 1
-			var callable := callables[i]
-			callables[i] = Callable()
+var streams: Array[Array] = [[] as Array[Callable], [] as Array[Callable]]
+var streamings: Dictionary
+var task := WorkerThreadPool.add_task(func() -> void:
+	while not close_requested:
+		for callables: Array[Callable] in streams:
+			var callable := pop_back(callables)
+			if callable.is_null(): continue
 			callable.call()
 			break
-)
+, true)
 var chunks: Dictionary
+var close_requested: bool
 
-static func push_back(callables: Array, callable: Callable):
+static func push_back(callables: Array[Callable], callable: Callable) -> void:
 	var i := 0
 	for c in callables:
 		if c.is_null(): break
@@ -32,6 +28,16 @@ static func push_back(callables: Array, callable: Callable):
 		callables.push_back(callable)
 	else:
 		callables[i] = callable
+
+static func pop_back(callables: Array[Callable]) -> Callable:
+	var i := 0
+	for c in callables:
+		if c.is_null(): break
+		i = i + 1
+	if i == 0: return Callable()
+	var callable := callables[i - 1]
+	callables[i - 1] = Callable()
+	return callable
 
 var body := PhysicsServer2D.body_create()
 var null_shapes := PackedInt32Array()
@@ -172,7 +178,7 @@ func prepare_compute_list():
 	var compute_list := rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
 	rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
-	rd.compute_list_dispatch(compute_list, render_rect.size.x, render_rect.size.y, 1)
+	rd.compute_list_dispatch(compute_list, render_rect.size.x * Chunk.SIZE.x / 32, render_rect.size.y * Chunk.SIZE.y / 32, 1)
 	rd.compute_list_end()
 
 func _process(_delta):
@@ -201,8 +207,6 @@ func _draw():
 	for coords in IS.rect2i_to_points(render_rect):
 		var chunk := get_chunk(coords)
 		if chunk == null: continue
-		#if Input.is_action_just_pressed("spawn"):
-			#shape_chunk(coords)
 		for shape in chunk.shapes:
 			draw_set_transform_matrix(PhysicsServer2D.body_get_shape_transform(body, shape))
 			var polygon_shape := PhysicsServer2D.body_get_shape(body, shape)
@@ -232,87 +236,103 @@ func _physics_process(_delta):
 	previous_process_rect = process_rect
 	for points in load_rects:
 		for coords in points:
-			if not can_load(coords): continue
-			push_back(operations[0], load_chunk.bind(coords))
+			load_chunk(coords)
 	for points in save_rects:
 		for coords in points:
-			if not can_save(coords): continue
-			push_back(operations[1], save_chunk.bind(coords))
+			save_chunk(coords)
 
 	if Input.is_action_just_pressed("ui_down"):
 		print("CHUNKS: %s" % chunks.size())
 		var count := 0
-		for callables: Array[Callable] in operations:
+		for callables: Array[Callable] in streams:
 			for callable in callables:
 				if callable.is_null(): break
 				count = count + 1
-		print("OPERATIONS: %s" % count)
+		print("STREAMS: %s" % count)
 
-func can_load(coords: Vector2i) -> bool:
-	var chunk := get_chunk(coords)
-	return chunk == null and previous_process_rect.has_point(coords)
+func _close_requested() -> void:
+	#streams[0].clear()
+	#streams[1].clear()
+	#WorkerThreadPool.wait_for_task_completion(task)
+	#previous_process_rect = Rect2i()
+		#save_chunk(coords)
+	#await get_tree().create_timer(3).timeout
+	#close_requested = true
+	#WorkerThreadPool.wait_for_task_completion(task)
+	for coords in chunks:
+		force_save_chunk(coords)
 
-func can_save(coords: Vector2i) -> bool:
-	var chunk := get_chunk(coords)
-	return chunk != null and not previous_process_rect.has_point(coords)
-
-func load_chunk(coords: Vector2i) -> void:
-	if not can_load(coords):
-		#print("Chunk %s stop loading" % coords)
-		return
-	var path := PixelMap.get_chunk_path(coords)
-	var chunk := Chunk.deserialize(FileAccess.get_file_as_bytes(path))
-	if not can_load(coords):
-		#print("Chunk %s stop loading caused by unload" % coords)
-		return
-	chunks[coords] = chunk
-
-func save_chunk(coords: Vector2i) -> void:
-	if not can_save(coords):
-		#print("Chunk %s stop saving" % coords)
-		return
-	var chunk := get_chunk(coords)
-	if chunk.modified_time != 1:
-		var path := PixelMap.get_chunk_path(coords)
-		var file := FileAccess.open(path, FileAccess.WRITE)
-		if file != null: file.store_buffer(chunk.serialize())
-	if not can_save(coords):
-		#print("Chunk %s stop saving caused by load" % coords)
-		return
-	chunks.erase(coords)
-
+func chunk_remove_shape(chunk: Chunk) -> void:
 	for shape in chunk.shapes:
 		PhysicsServer2D.body_set_shape_disabled(body, shape, true)
 	null_shapes.append_array(chunk.shapes)
 
-func _close_requested():
-	previous_process_rect = Rect2i()
-	for coords in chunks.keys():
-		save_chunk(coords)
+func load_chunk(coords: Vector2i) -> void:
+	var chunk := get_chunk(coords)
+	if chunk != null or streamings.get(coords): return
+	streamings[coords] = true
+	push_back(streams[0], func():
+		if not previous_process_rect.has_point(coords): streamings.erase(coords); return
+		chunk = force_load_chunk(coords)
+		if not previous_process_rect.has_point(coords): streamings.erase(coords); return
+		chunks[coords] = chunk
+		streamings.erase(coords)
+	)
 
-func chunk_get_bit_map(chunk: Chunk) -> BitMap:
-	var bit_map := BitMap.new()
-	bit_map.create(Chunk.SIZE)
-	for coords in IS.rect2i_to_points(Rect2i(Vector2i.ZERO, Chunk.SIZE)):
-		bit_map.set_bitv(coords, pixel_set.indexed_pixels[chunk.get_cell_pixel(coords)].state == Pixel.States.SOLID)
-	return bit_map
+func save_chunk(coords: Vector2i) -> void:
+	var chunk := get_chunk(coords)
+	if chunk == null or streamings.get(coords): return
+	#if chunk.modified_time == 0: chunks.erase(coords); chunk_remove_shape(chunk); return
+	streamings[coords] = true
+	push_back(streams[1], func():
+		if previous_process_rect.has_point(coords): streamings.erase(coords); return
+		force_save_chunk(coords)
+		if previous_process_rect.has_point(coords): streamings.erase(coords); return
+		chunks.erase(coords)
+		streamings.erase(coords)
+		chunk_remove_shape(chunk)
+	)
+
+func force_load_chunk(coords: Vector2i) -> Chunk:
+	var chunk := Chunk.new()
+	var file := FileAccess.open(get_chunk_path(coords), FileAccess.READ)
+	if file != null:
+		chunk.data = file.get_buffer(Chunk.SIZE.x * Chunk.SIZE.y * Chunk.TILE_SIZE * 4).to_int32_array()
+		for scene in file.get_var(true) as Array[PackedScene]:
+			add_child.call_deferred(scene.instantiate())
+	else:
+		chunk.data.resize(Chunk.SIZE.x * Chunk.SIZE.y * Chunk.TILE_SIZE)
+		chunk.modified_time = 1
+	return chunk
+
+func force_save_chunk(coords: Vector2i) -> void:
+	var chunk := get_chunk(coords)
+	var file := FileAccess.open(get_chunk_path(coords), FileAccess.WRITE)
+	if file != null:
+		file.store_buffer(chunk.data.to_byte_array())
+		var scenes: Array[PackedScene]
+		for child: Node2D in get_children().filter(
+			func(child: Node) -> bool: return child is Node2D and Rect2(coords * Chunk.SIZE, Chunk.SIZE).has_point(child.position)
+		):
+			var found_children := child.find_children("*")
+			for found_child in found_children:
+				found_child.owner = child
+			var scene := PackedScene.new()
+			scene.pack(child)
+			scenes.push_back(scene)
+		file.store_var(scenes, true)
 
 func shape_chunk(coords: Vector2i):
 	var chunk := get_chunk(coords)
 	if chunk == null or chunk.shaped_time == chunk.modified_time: return
 	chunk.shaped_time = chunk.modified_time
-
-	for shape in chunk.shapes:
-		PhysicsServer2D.body_set_shape_disabled(body, shape, true)
-	null_shapes.append_array(chunk.shapes)
+	chunk_remove_shape(chunk)
 	chunk.shapes.clear()
-
 	var bit_map := chunk_get_bit_map(chunk)
 	var polygons := bit_map.opaque_to_polygons(Rect2i(Vector2i.ZERO, Chunk.SIZE))
 	for polygon in polygons:
 		for points in Geometry2D.decompose_polygon_in_convex(polygon):
 			var shape := PhysicsServer2D.convex_polygon_shape_create()
-			#polygon.reverse()
 			PhysicsServer2D.shape_set_data(shape, points)
 			var index: int
 			if null_shapes.is_empty():
@@ -323,5 +343,12 @@ func shape_chunk(coords: Vector2i):
 				null_shapes.remove_at(null_shapes.size() - 1)
 				PhysicsServer2D.body_set_shape(body, index, shape)
 				PhysicsServer2D.body_set_shape_disabled(body, index, false)
-			chunk.shapes.push_back(index)
 			PhysicsServer2D.body_set_shape_transform(body, index, Transform2D(0, coords * Chunk.SIZE))
+			chunk.shapes.push_back(index)
+
+func chunk_get_bit_map(chunk: Chunk) -> BitMap:
+	var bit_map := BitMap.new()
+	bit_map.create(Chunk.SIZE)
+	for coords in IS.rect2i_to_points(Rect2i(Vector2i.ZERO, Chunk.SIZE)):
+		bit_map.set_bitv(coords, pixel_set.indexed_pixels[chunk.get_cell_pixel(coords)].state == Pixel.States.SOLID)
+	return bit_map

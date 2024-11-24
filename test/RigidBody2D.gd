@@ -3,18 +3,16 @@ extends RigidBody2D
 var force := 2000
 
 func _ready() -> void:
-	$CollisionShape2D.shape = ConvexPolygonShape2D.new()
-	$CollisionShape2D.shape.points = $Polygon2D.polygon
+	if self == null: printerr(666)
+	$CollisionPolygon2D.polygon = $Polygon2D.polygon
 	$Polygon2D.texture = [
 		preload("res://test/textures/oak_planks.png"),
 		preload("res://test/textures/stone.png"),
 		preload("res://test/textures/sand.png")
 	].pick_random()
 	$Polygon2D.uv = $Polygon2D.polygon
-	center_of_mass_mode = CENTER_OF_MASS_MODE_CUSTOM
-	center_of_mass = Vector2(8, 8)
 
-func _physics_process(_delta):
+func _physics_process(_delta: float) -> void:
 	if Input.is_key_pressed(KEY_LEFT):
 		apply_force(Vector2(-force, 0))
 	if Input.is_key_pressed(KEY_RIGHT):
@@ -38,3 +36,4 @@ func _physics_process(_delta):
 	var pixel_map := Main.node.get_node("PixelMap") as PixelMap
 	for coords in IS.rect2i_to_points(rect):
 		pixel_map.shape_chunk(coords)
+	freeze = not rect.intersects(pixel_map.previous_process_rect)
