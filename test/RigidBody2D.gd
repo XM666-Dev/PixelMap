@@ -1,16 +1,30 @@
 extends RigidBody2D
 
 var force := 2000
+var mouse_on := true
+@export_storage var initialized := false
+
+class SerializedData:
+	var initialized: bool
+
+func serialize() -> SerializedData:
+	var data := SerializedData.new()
+	data.initialized = true
+	return data
+
+func deserialize(data: SerializedData) -> void:
+	initialized = data.initialized
 
 func _ready() -> void:
-	if self == null: printerr(666)
-	$CollisionPolygon2D.polygon = $Polygon2D.polygon
-	$Polygon2D.texture = [
-		preload("res://test/textures/oak_planks.png"),
-		preload("res://test/textures/stone.png"),
-		preload("res://test/textures/sand.png")
-	].pick_random()
-	$Polygon2D.uv = $Polygon2D.polygon
+	if not initialized:
+		$CollisionPolygon2D.polygon = $Polygon2D.polygon
+		$Polygon2D.texture = [
+			preload("res://test/textures/oak_planks.png"),
+			preload("res://test/textures/stone.png"),
+			preload("res://test/textures/sand.png")
+		].pick_random()
+		$Polygon2D.uv = $Polygon2D.polygon
+		initialized = true
 
 func _physics_process(_delta: float) -> void:
 	if Input.is_key_pressed(KEY_LEFT):
@@ -40,8 +54,7 @@ func _physics_process(_delta: float) -> void:
 
 
 func _on_mouse_entered() -> void:
-	$Polygon2D.color = Color.AQUA
-
+	$Polygon2D.color = Color.GRAY
 
 func _on_mouse_exited() -> void:
 	$Polygon2D.color = Color.WHITE

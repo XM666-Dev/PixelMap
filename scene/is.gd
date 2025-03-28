@@ -73,3 +73,11 @@ static func open(path: String) -> DirAccess:
 
 static func open_dir(dir: DirAccess, file: String) -> DirAccess:
 	return open(dir.get_current_dir().path_join(file))
+
+static func pack_node(node: Node) -> Array[Variant]:
+	return [node, node.get_children().map(pack_node)]
+
+static func unpack_node(nodes: Array[Variant]) -> Node:
+	for child in nodes[1]:
+		nodes[0].add_child(unpack_node(child))
+	return nodes[0]
