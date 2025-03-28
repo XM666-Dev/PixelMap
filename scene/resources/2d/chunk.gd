@@ -1,6 +1,6 @@
 class_name Chunk
 
-const SIZE := Vector2i(256, 256)
+const SIZE := Vector2i(32, 32)
 const TILE_SIZE := 1
 
 static var NULL_BYTES := PackedByteArray()
@@ -9,6 +9,7 @@ var data: PackedInt32Array
 var modified_time := 0
 var shaped_time := -1
 var shapes: PackedInt32Array
+var nodes: Array[Node]
 
 static func _static_init():
 	NULL_BYTES.resize(SIZE.x * SIZE.y * TILE_SIZE * 4)

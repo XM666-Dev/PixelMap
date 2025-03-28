@@ -37,3 +37,11 @@ func _physics_process(_delta: float) -> void:
 	for coords in IS.rect2i_to_points(rect):
 		pixel_map.shape_chunk(coords)
 	freeze = not rect.intersects(pixel_map.previous_process_rect)
+
+
+func _on_mouse_entered() -> void:
+	$Polygon2D.color = Color.AQUA
+
+
+func _on_mouse_exited() -> void:
+	$Polygon2D.color = Color.WHITE

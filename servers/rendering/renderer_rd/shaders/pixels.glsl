@@ -1,7 +1,7 @@
 #[compute]
 #version 460
 
-const uvec2 CHUNK_SIZE = {256, 256};
+const uvec2 CHUNK_SIZE = {32, 32};
 
 layout(local_size_x = 32, local_size_y = 32) in;
 

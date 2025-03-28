@@ -1,4 +1,4 @@
-class_name PixelMap extends Node2D
+extends Node2D
 
 @export var pixel_set: PixelSet
 var render_extents: Vector2i
@@ -7,17 +7,24 @@ var texture := Texture2DRD.new()
 @export var process_extents: Vector2i
 var previous_process_rect: Rect2i
 var streams: Array[Array] = [[] as Array[Callable], [] as Array[Callable]]
-var streamings: Dictionary
+var streamings: Dictionary[Vector2i, bool]
 var task := WorkerThreadPool.add_task(func() -> void:
-	while not close_requested:
+	while true:
+		var i := 0
 		for callables: Array[Callable] in streams:
 			var callable := pop_back(callables)
-			if callable.is_null(): continue
+			if callable.is_null():
+				if i == 1 and close_requested:
+					print(1)
+					return
+				i += 1
+				continue
 			callable.call()
 			break
 , true)
 var chunks: Dictionary
 var close_requested: bool
+var children: Array[Node2D]
 
 static func push_back(callables: Array[Callable], callable: Callable) -> void:
 	var i := 0
@@ -174,30 +181,32 @@ func prepare_uniform_set():
 	)
 
 func prepare_compute_list():
-	var render_rect := get_render_rect()
-	var compute_list := rd.compute_list_begin()
-	rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
-	rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
-	rd.compute_list_dispatch(compute_list, render_rect.size.x * Chunk.SIZE.x / 32, render_rect.size.y * Chunk.SIZE.y / 32, 1)
-	rd.compute_list_end()
+	pass
+	#var render_rect := get_render_rect()
+	#var compute_list := rd.compute_list_begin()
+	#rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
+	#rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
+	#rd.compute_list_dispatch(compute_list, render_rect.size.x * Chunk.SIZE.x / 32, render_rect.size.y * Chunk.SIZE.y / 32, 1)
+	#rd.compute_list_end()
 
 func _process(_delta):
-	var render_rect := get_render_rect()
-	var data := PackedInt32Array([
-		render_extents.x, render_extents.y,
-		render_rect.position.x, render_rect.position.y,
-		Main.time
-	]).to_byte_array()
-	rd.buffer_update(buf_map, 0, data.size(), data)
-	for coords in IS.rect2i_to_points(render_rect):
-		var chunk := get_chunk(coords)
-		var bytes := chunk.data.to_byte_array() if chunk != null else Chunk.NULL_BYTES
-		var size := bytes.size()
-		var render_coords := IS.vector2i_posmodv(coords, render_extents)
-		var render_index := render_coords.y * render_extents.x + render_coords.x
-		rd.buffer_update(buf_chunks, render_index * size, size, bytes)
-	prepare_compute_list()
-	queue_redraw()
+	pass
+	#var render_rect := get_render_rect()
+	#var data := PackedInt32Array([
+		#render_extents.x, render_extents.y,
+		#render_rect.position.x, render_rect.position.y,
+		#Main.time
+	#]).to_byte_array()
+	#rd.buffer_update(buf_map, 0, data.size(), data)
+	#for coords in IS.rect2i_to_points(render_rect):
+		#var chunk := get_chunk(coords)
+		#var bytes := chunk.data.to_byte_array() if chunk != null else Chunk.NULL_BYTES
+		#var size := bytes.size()
+		#var render_coords := IS.vector2i_posmodv(coords, render_extents)
+		#var render_index := render_coords.y * render_extents.x + render_coords.x
+		#rd.buffer_update(buf_chunks, render_index * size, size, bytes)
+	#prepare_compute_list()
+	#queue_redraw()
 
 func _draw():
 	var rect := IS.get_viewport_rect_global(self)
@@ -251,16 +260,14 @@ func _physics_process(_delta):
 		print("STREAMS: %s" % count)
 
 func _close_requested() -> void:
-	#streams[0].clear()
-	#streams[1].clear()
-	#WorkerThreadPool.wait_for_task_completion(task)
-	#previous_process_rect = Rect2i()
-		#save_chunk(coords)
-	#await get_tree().create_timer(3).timeout
-	#close_requested = true
-	#WorkerThreadPool.wait_for_task_completion(task)
+	streams[0].clear()
+	streams[1].clear()
+	streamings.clear()
+	previous_process_rect = Rect2i()
+	close_requested = true
 	for coords in chunks:
-		force_save_chunk(coords)
+		save_chunk(coords)
+	WorkerThreadPool.wait_for_task_completion(task)
 
 func chunk_remove_shape(chunk: Chunk) -> void:
 	for shape in chunk.shapes:
@@ -292,14 +299,15 @@ func save_chunk(coords: Vector2i) -> void:
 		streamings.erase(coords)
 		chunk_remove_shape(chunk)
 	)
+	#chunk.nodes.assign(get_children().filter(func(child: Node) -> bool: return child is Node2D and Rect2(coords * Chunk.SIZE, Chunk.SIZE).has_point(child.position)))
 
 func force_load_chunk(coords: Vector2i) -> Chunk:
 	var chunk := Chunk.new()
 	var file := FileAccess.open(get_chunk_path(coords), FileAccess.READ)
 	if file != null:
 		chunk.data = file.get_buffer(Chunk.SIZE.x * Chunk.SIZE.y * Chunk.TILE_SIZE * 4).to_int32_array()
-		for scene in file.get_var(true) as Array[PackedScene]:
-			add_child.call_deferred(scene.instantiate())
+		#for scene in file.get_var(true) as Array[PackedScene]:
+			#add_child.call_deferred(scene.instantiate())
 	else:
 		chunk.data.resize(Chunk.SIZE.x * Chunk.SIZE.y * Chunk.TILE_SIZE)
 		chunk.modified_time = 1
@@ -310,17 +318,15 @@ func force_save_chunk(coords: Vector2i) -> void:
 	var file := FileAccess.open(get_chunk_path(coords), FileAccess.WRITE)
 	if file != null:
 		file.store_buffer(chunk.data.to_byte_array())
-		var scenes: Array[PackedScene]
-		for child: Node2D in get_children().filter(
-			func(child: Node) -> bool: return child is Node2D and Rect2(coords * Chunk.SIZE, Chunk.SIZE).has_point(child.position)
-		):
-			var found_children := child.find_children("*")
-			for found_child in found_children:
-				found_child.owner = child
-			var scene := PackedScene.new()
-			scene.pack(child)
-			scenes.push_back(scene)
-		file.store_var(scenes, true)
+		#var scenes: Array[PackedScene]
+		#for child: Node2D in chunk.nodes:
+			#var found_children := child.find_children("*")
+			#for found_child in found_children:
+				#found_child.owner = child
+			#var scene := PackedScene.new()
+			#scene.pack(child)
+			#scenes.push_back(scene)
+		#file.store_var(scenes, true)
 
 func shape_chunk(coords: Vector2i):
 	var chunk := get_chunk(coords)

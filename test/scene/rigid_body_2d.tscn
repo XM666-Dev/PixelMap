@@ -1,8 +1,9 @@
 [gd_scene load_steps=2 format=3 uid="uid://bbwes6f33g6ik"]
 
-[ext_resource type="Script" path="res://test/RigidBody2D.gd" id="1_vom48"]
+[ext_resource type="Script" uid="uid://bwci1d7aoi4mk" path="res://test/RigidBody2D.gd" id="1_vom48"]
 
 [node name="RigidBody2D" type="RigidBody2D"]
+input_pickable = true
 script = ExtResource("1_vom48")
 
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="."]
@@ -10,3 +11,6 @@ script = ExtResource("1_vom48")
 [node name="Polygon2D" type="Polygon2D" parent="."]
 texture_repeat = 2
 polygon = PackedVector2Array(-16, -16, 16, -16, 16, 16, -16, 16)
+
+[connection signal="mouse_entered" from="." to="." method="_on_mouse_entered"]
+[connection signal="mouse_exited" from="." to="." method="_on_mouse_exited"]

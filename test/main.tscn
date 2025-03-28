@@ -1,11 +1,10 @@
-[gd_scene load_steps=7 format=3 uid="uid://d0p6wkleyo0og"]
+[gd_scene load_steps=6 format=3 uid="uid://d0p6wkleyo0og"]
 
-[ext_resource type="Script" path="res://test/main.gd" id="1_yldnw"]
-[ext_resource type="Script" path="res://scene/2d/pixel_map.gd" id="2_uhw1h"]
+[ext_resource type="Script" uid="uid://cmbj80nd6bwse" path="res://test/main.gd" id="1_yldnw"]
+[ext_resource type="Script" uid="uid://cv6wrlaggwh8n" path="res://scene/2d/pixel_map2.gd" id="2_x3l4o"]
 [ext_resource type="Resource" uid="uid://be4yagi61ovg5" path="res://test/resources/pixel_set.tres" id="3_q1jr4"]
-[ext_resource type="Script" path="res://test/Player.gd" id="4_gk3bw"]
-[ext_resource type="Script" path="res://test/Cursor.gd" id="5_il10q"]
-[ext_resource type="PackedScene" uid="uid://bbwes6f33g6ik" path="res://test/scene/rigid_body_2d.tscn" id="6_nlsny"]
+[ext_resource type="Script" uid="uid://qhyadv30q6m1" path="res://test/Player.gd" id="4_gk3bw"]
+[ext_resource type="Script" uid="uid://chabch4snrmvn" path="res://test/Cursor.gd" id="5_il10q"]
 
 [node name="Main" type="Node2D"]
 texture_filter = 1
@@ -14,11 +13,9 @@ script = ExtResource("1_yldnw")
 [node name="PixelMap" type="Node2D" parent="."]
 unique_name_in_owner = true
 texture_repeat = 2
-script = ExtResource("2_uhw1h")
+script = ExtResource("2_x3l4o")
 pixel_set = ExtResource("3_q1jr4")
-process_extents = Vector2i(8, 8)
-
-[node name="RigidBody2D" parent="PixelMap" instance=ExtResource("6_nlsny")]
+process_extents = Vector2i(16, 16)
 
 [node name="Player" type="Node2D" parent="."]
 unique_name_in_owner = true
