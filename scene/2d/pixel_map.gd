@@ -16,7 +16,7 @@ var load_count: int = 0
 var save_count: int = 0
 @onready var load_task := WorkerThreadPool.add_task(func() -> void:
 	while true:
-		for i in mini(load_count, 128):
+		for i in mini(load_count, 32):
 			var stream := load_streams[load_count - 1]
 			load_count -= 1
 
@@ -24,11 +24,11 @@ var save_count: int = 0
 				add_chunk(stream, load_chunk(stream))
 
 			streams.erase(stream)
-		await get_tree().create_timer(1 / 30).timeout
+		await get_tree().create_timer(1 / 15).timeout
 )
 @onready var save_task := WorkerThreadPool.add_task(func() -> void:
 	while true:
-		for i in mini(save_count, 128):
+		for i in mini(save_count, 32):
 			var stream := save_streams[save_count - 1]
 			save_count -= 1
 
@@ -38,7 +38,7 @@ var save_count: int = 0
 					erase_chunk(stream)
 
 			streams.erase(stream)
-		await get_tree().create_timer(1 / 30).timeout
+		await get_tree().create_timer(1 / 15).timeout
 )
 var node_streams: Dictionary[Vector2i, bool]
 var load_node_streams: Array[Vector2i]
@@ -47,7 +47,7 @@ var load_node_count: int = 0
 var save_node_count: int = 0
 @onready var load_node_task := WorkerThreadPool.add_task(func() -> void:
 	while true:
-		for i in mini(load_node_count, 128):
+		for i in mini(load_node_count, 32):
 			var stream := load_node_streams[load_node_count - 1]
 			load_node_count -= 1
 
@@ -55,11 +55,11 @@ var save_node_count: int = 0
 				add_chunk_nodes(load_chunk_nodes(stream))
 
 			node_streams.erase(stream)
-		await get_tree().create_timer(1 / 30).timeout
+		await get_tree().create_timer(1 / 15).timeout
 )
 @onready var save_node_task := WorkerThreadPool.add_task(func() -> void:
 	while true:
-		for i in mini(save_node_count, 128):
+		for i in mini(save_node_count, 32):
 			var stream := save_node_streams[save_node_count - 1]
 			save_node_count -= 1
 
@@ -69,7 +69,7 @@ var save_node_count: int = 0
 					clear_chunk_nodes(stream)
 
 			node_streams.erase(stream)
-		await get_tree().create_timer(1 / 30).timeout
+		await get_tree().create_timer(1 / 15).timeout
 )
 
 var body := PhysicsServer2D.body_create()
@@ -175,7 +175,7 @@ func prepare_map():
 		RenderingDevice.TEXTURE_USAGE_STORAGE_BIT
 	)
 	img_map = rd.texture_create(format, RDTextureView.new())
-	buf_map = rd.uniform_buffer_create(32)
+	buf_map = rd.uniform_buffer_create(16)
 	texture.texture_rd_rid = img_map
 
 func prepare_chunks():
@@ -226,8 +226,6 @@ func _process(_delta):
 	var render_rect := get_render_rect()
 	var viewport_rect := IS.get_viewport_rect_global(self)
 	var data := PackedInt32Array([
-		#render_extents.x, render_extents.y,
-		#render_rect.position.x, render_rect.position.y,
 		viewport_rect.position.x, viewport_rect.position.y,
 		Main.time
 	]).to_byte_array()
