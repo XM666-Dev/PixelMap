@@ -1,5 +1,7 @@
 class_name PixelMap extends Node2D
 
+const GROUP_SIZE := Vector2i(32, 32)
+
 @export var pixel_set: PixelSet
 var render_extents: Vector2i
 var texture := Texture2DRD.new()
@@ -19,7 +21,7 @@ var save_count: int = 0
 			load_count -= 1
 
 			if previous_process_rect.has_point(stream):
-				chunks[stream] = load_chunk(stream)
+				add_chunk(stream, load_chunk(stream))
 
 			streams.erase(stream)
 		await get_tree().create_timer(1 / 30).timeout
@@ -32,8 +34,8 @@ var save_count: int = 0
 
 			if not previous_process_rect.has_point(stream):
 				save_chunk(stream)
-			if not previous_process_rect.has_point(stream):
-				erase_chunk(stream)
+				if not previous_process_rect.has_point(stream):
+					erase_chunk(stream)
 
 			streams.erase(stream)
 		await get_tree().create_timer(1 / 30).timeout
@@ -50,8 +52,7 @@ var save_node_count: int = 0
 			load_node_count -= 1
 
 			if previous_process_rect.has_point(stream):
-				for node in load_chunk_nodes(stream):
-					add_child.call_deferred(node)
+				add_chunk_nodes(load_chunk_nodes(stream))
 
 			node_streams.erase(stream)
 		await get_tree().create_timer(1 / 30).timeout
@@ -64,8 +65,8 @@ var save_node_count: int = 0
 
 			if not previous_process_rect.has_point(stream):
 				save_chunk_nodes(stream)
-			if not previous_process_rect.has_point(stream):
-				clear_chunk_nodes(stream)
+				if not previous_process_rect.has_point(stream):
+					clear_chunk_nodes(stream)
 
 			node_streams.erase(stream)
 		await get_tree().create_timer(1 / 30).timeout
@@ -144,7 +145,12 @@ static func prepare_shader():
 	var shader_file := preload("res://servers/rendering/renderer_rd/shaders/pixels.glsl")
 	var shader_spirv := shader_file.get_spirv()
 	shader = rd.shader_create_from_spirv(shader_spirv)
-	pipeline = rd.compute_pipeline_create(shader)
+	var constants := [RDPipelineSpecializationConstant.new(), RDPipelineSpecializationConstant.new()]
+	constants[0].constant_id = 0
+	constants[0].value = Chunk.SIZE.x
+	constants[1].constant_id = 1
+	constants[1].value = Chunk.SIZE.y
+	pipeline = rd.compute_pipeline_create(shader, constants)
 
 func prepare_pixel_set():
 	var format = RDTextureFormat.new()
@@ -204,23 +210,25 @@ func prepare_uniform_set():
 	uni_buf_chunks.binding = 4
 	uni_buf_chunks.add_id(buf_chunks)
 
-	uniform_set = rd.uniform_set_create(
-		[uni_tex_pixel_set, uni_buf_pixel_set, uni_img_map, uni_buf_map, uni_buf_chunks], shader, 0
-	)
+	uniform_set = rd.uniform_set_create([uni_tex_pixel_set, uni_buf_pixel_set, uni_img_map, uni_buf_map, uni_buf_chunks], shader, 0)
 
 func prepare_compute_list():
-	var render_rect := get_render_rect()
+	var viewport_rect := IS.get_viewport_rect_global(self)
 	var compute_list := rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
 	rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
-	rd.compute_list_dispatch(compute_list, render_rect.size.x * Chunk.SIZE.x / 32, render_rect.size.y * Chunk.SIZE.y / 32, 1)
+	var x_groups := IS.posdiv(viewport_rect.size.x, GROUP_SIZE.x) + 1
+	var y_groups := IS.posdiv(viewport_rect.size.y, GROUP_SIZE.y) + 1
+	rd.compute_list_dispatch(compute_list, x_groups, y_groups, 1)
 	rd.compute_list_end()
 
 func _process(_delta):
 	var render_rect := get_render_rect()
+	var viewport_rect := IS.get_viewport_rect_global(self)
 	var data := PackedInt32Array([
-		render_extents.x, render_extents.y,
-		render_rect.position.x, render_rect.position.y,
+		#render_extents.x, render_extents.y,
+		#render_rect.position.x, render_rect.position.y,
+		viewport_rect.position.x, viewport_rect.position.y,
 		Main.time
 	]).to_byte_array()
 	rd.buffer_update(buf_map, 0, data.size(), data)
@@ -253,11 +261,11 @@ func _draw():
 	var mouse_position := get_local_mouse_position()
 	var chunk_coords := local_to_chunk(mouse_position)
 	draw_rect(Rect2(chunk_coords * Chunk.SIZE, Chunk.SIZE), Color.WHITE, false)
-	var chunk := get_chunk(chunk_coords)
+	var focus_chunk := get_chunk(chunk_coords)
 	draw_string(
 		Main.font,
 		chunk_coords * Chunk.SIZE,
-		"%s: %s" % [chunk_coords, null if chunk == null else "Chunk"],
+		"%s: %s" % [chunk_coords, "null" if focus_chunk == null else "Chunk"],
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
 		8
@@ -294,11 +302,6 @@ func _close_requested() -> void:
 	for i in save_node_count:
 		save_chunk_nodes(save_node_streams[i])
 
-func get_chunk_nodes(coords: Vector2i) -> Array[Node]:
-	return get_children().filter(func(child: Node) -> bool:
-		return child is Node2D and Rect2(coords * Chunk.SIZE, Chunk.SIZE).has_point(child.position)
-	)
-
 func add_chunk(coords: Vector2i, chunk: Chunk) -> void:
 	chunks.get_or_add(coords, chunk)
 
@@ -312,6 +315,15 @@ func clear_chunk_shapes(coords: Vector2i) -> void:
 		PhysicsServer2D.body_set_shape_disabled(body, shape, true)
 	shapes.append_array(chunk.shapes)
 	chunk.shapes.clear()
+
+func get_chunk_nodes(coords: Vector2i) -> Array[Node]:
+	return get_children().filter(func(child: Node) -> bool:
+		return child is Node2D and Rect2(coords * Chunk.SIZE, Chunk.SIZE).has_point(child.position)
+	)
+
+func add_chunk_nodes(nodes: Array) -> void:
+	for node in nodes:
+		add_child.call_deferred(node)
 
 func clear_chunk_nodes(coords: Vector2i) -> void:
 	for child in get_chunk_nodes(coords):
@@ -411,6 +423,6 @@ func get_chunk_bit_map(coords: Vector2i) -> BitMap:
 	var bit_map := BitMap.new()
 	bit_map.create(Chunk.SIZE)
 	for point in IS.rect2i_to_points(Rect2i(Vector2i.ZERO, Chunk.SIZE)):
-		var state := pixel_set.indexed_pixels[chunks[coords].get_cell_pixel(point)].state
-		bit_map.set_bitv(point, state == Pixel.States.SOLID)
+		var state := pixel_set.pixels[chunks[coords].get_cell_pixel(point)].state
+		bit_map.set_bitv(point, state == Pixel.State.SOLID)
 	return bit_map

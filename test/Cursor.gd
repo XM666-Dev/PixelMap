@@ -34,24 +34,22 @@ func _input(event):
 		%PixelMap.add_child(rigid_body)
 		rigid_body.position = get_global_mouse_position()
 
-		#for coords in %PixelMap.chunks:
-			#%PixelMap.force_save_chunk(coords)
-
 func _physics_process(_delta):
 	var pixel_map := %PixelMap as PixelMap
 	if drawing:
 		var rect := Rect2i(pixel_map.get_local_mouse_position().floor(), draw_size)
 		for coords in IS.rect2i_to_points(rect):
-			pixel_map.set_cell_pixel(coords, pixel_map.pixel_set.pixels[pixel_index].id)
+			pixel_map.set_cell_pixel(coords, pixel_index)
 
 func _process(_delta):
 	queue_redraw()
 
 func _draw():
 	var pixel_map := %PixelMap as PixelMap
-	var texture := pixel_map.pixel_set.pixels[pixel_index].textures[0]
+	var texture := pixel_map.pixel_set.pixels[pixel_index].texture
 	var rect := Rect2i(pixel_map.get_local_mouse_position().floor(), draw_size)
-	draw_texture_rect_region(texture, rect, rect)
+	if texture != null:
+		draw_texture_rect_region(texture, rect, rect)
 	var max_frame := 30
 	var frame := Main.time % max_frame
 	if frame > max_frame / 2:

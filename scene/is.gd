@@ -24,6 +24,12 @@ static func posdiv(x: int, y: int) -> int:
 		return x / y - 1
 	return x / y
 
+static func posdiv_ceil(x: int, y: int) -> int:
+	var value := x % y
+	if value > 0:
+		return x / y + 1
+	return x / y
+
 static func vector2i_posmodv(x: Vector2i, y: Vector2i) -> Vector2i:
 	return Vector2i(posmod(x.x, y.x), posmod(x.y, y.y))
 
@@ -50,7 +56,7 @@ static func set_properties(object: Object, properties: Dictionary):
 		assert(property_path in object)
 		object.set_indexed(property_path, properties[property_path])
 
-static func make_atlas(textures: Array[Texture2D], format: Image.Format) -> Dictionary:
+static func make_atlas(textures: Array, format: Image.Format) -> Dictionary:
 	var sizes := PackedVector2Array(textures.map(func(texture): return texture.get_size()))
 	var atlas := Geometry2D.make_atlas(sizes)
 	var image := Image.create(atlas.size.x, atlas.size.y, false, format)
@@ -61,7 +67,7 @@ static func make_atlas(textures: Array[Texture2D], format: Image.Format) -> Dict
 		atlas_texture.atlas = image_texture
 		atlas_texture.region = Rect2(atlas.points[i], sizes[i])
 		atlas_textures.push_back(atlas_texture)
-		var src_image := textures[i].get_image()
+		var src_image: Image = textures[i].get_image()
 		src_image.convert(format)
 		image.blit_rect(src_image, Rect2i(Vector2i.ZERO, sizes[i]), atlas.points[i])
 	image_texture.set_image(image)
