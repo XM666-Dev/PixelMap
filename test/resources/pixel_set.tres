@@ -11,37 +11,37 @@
 
 [sub_resource type="Resource" id="Resource_4m54q"]
 script = ExtResource("1_d513a")
-name = &""
+name = &"air"
 texture = ExtResource("2_ihlxt")
 state = 2
 
 [sub_resource type="Resource" id="Resource_wf4uh"]
 script = ExtResource("1_d513a")
-name = &""
+name = &"dirt"
 texture = ExtResource("3_j1ug0")
 state = 0
 
 [sub_resource type="Resource" id="Resource_fkk5k"]
 script = ExtResource("1_d513a")
-name = &""
+name = &"stone"
 texture = ExtResource("3_oawty")
 state = 0
 
 [sub_resource type="Resource" id="Resource_fsmh6"]
 script = ExtResource("1_d513a")
-name = &""
+name = &"sand"
 texture = ExtResource("4_w7hdk")
 state = 0
 
 [sub_resource type="Resource" id="Resource_mr062"]
 script = ExtResource("1_d513a")
-name = &""
+name = &"wood"
 texture = ExtResource("5_4i71y")
 state = 0
 
 [sub_resource type="Resource" id="Resource_bw3ey"]
 script = ExtResource("1_d513a")
-name = &""
+name = &"blank"
 texture = ExtResource("7_a1dxh")
 state = 0
 metadata/_custom_type_script = "uid://tfp0jp6xw4ti"

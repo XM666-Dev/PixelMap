@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="WorldGen" load_steps=3 format=3 uid="uid://dsylcoey7prjg"]
+
+[ext_resource type="Script" uid="uid://dsbhe0ftof0as" path="res://scene/resources/2d/world_gen.gd" id="1_vmcgq"]
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_vmcgq"]
+noise_type = 3
+
+[resource]
+script = ExtResource("1_vmcgq")
+noise = SubResource("FastNoiseLite_vmcgq")
+metadata/_custom_type_script = "uid://dsbhe0ftof0as"

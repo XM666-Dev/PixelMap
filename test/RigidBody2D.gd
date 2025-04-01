@@ -4,17 +4,6 @@ var force := 2000
 var mouse_on := true
 @export_storage var initialized := false
 
-class SerializedData:
-	var initialized: bool
-
-func serialize() -> SerializedData:
-	var data := SerializedData.new()
-	data.initialized = true
-	return data
-
-func deserialize(data: SerializedData) -> void:
-	initialized = data.initialized
-
 func _ready() -> void:
 	if not initialized:
 		$CollisionPolygon2D.polygon = $Polygon2D.polygon

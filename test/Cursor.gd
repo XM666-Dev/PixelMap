@@ -10,22 +10,22 @@ func _input(event):
 	var pixel_map := %PixelMap as PixelMap
 	if event.is_action_pressed("previous"):
 		if Input.is_key_pressed(KEY_CTRL):
-			resize_time = Main.time
+			resize_time = Engine.get_process_frames()
 			draw_size = (draw_size - Vector2i.ONE).clamp(Vector2i.ONE, max_draw_size)
 		elif Input.is_key_pressed(KEY_ALT):
 			var camera := %Player/Camera2D as Camera2D
 			camera.zoom = (camera.zoom - Vector2(0.2, 0.2)).clamp(Vector2(2, 2), Vector2(16, 16))
 		else:
-			pixel_index = (pixel_index - 1) % pixel_map.pixel_set.pixels.size()
+			pixel_index = posmod(pixel_index - 1, pixel_map.pixel_set.pixels.size())
 	if event.is_action_pressed("next"):
 		if Input.is_key_pressed(KEY_CTRL):
-			resize_time = Main.time
+			resize_time = Engine.get_process_frames()
 			draw_size = (draw_size + Vector2i.ONE).clamp(Vector2i.ONE, max_draw_size)
 		elif Input.is_key_pressed(KEY_ALT):
 			var camera := %Player/Camera2D as Camera2D
 			camera.zoom = (camera.zoom + Vector2(0.2, 0.2)).clamp(Vector2(2, 2), Vector2(16, 16))
 		else:
-			pixel_index = (pixel_index + 1) % pixel_map.pixel_set.pixels.size()
+			pixel_index = posmod(pixel_index + 1, pixel_map.pixel_set.pixels.size())
 	if event.is_action("fire"):
 		drawing = event.pressed
 	if event.is_action_pressed("spawn"):
@@ -49,9 +49,18 @@ func _draw():
 	var texture := pixel_map.pixel_set.pixels[pixel_index].texture
 	var rect := Rect2i(pixel_map.get_local_mouse_position().floor(), draw_size)
 	if texture != null:
-		draw_texture_rect_region(texture, rect, rect)
+		var width := texture.get_width()
+		var height := texture.get_height()
+		if width != height:
+			var size := Vector2i(height, height)
+			var offset := IS.vector2i_posmodv(rect.position, size)
+			var src_rect := IS.rect2i_range(offset, size)
+			#var end := rect.end.min(rect.position - offset + size)
+			draw_texture_rect_region(texture, rect, src_rect)
+		else:
+			draw_texture_rect_region(texture, rect, rect)
 	var max_frame := 30
-	var frame := Main.time % max_frame
+	var frame := Engine.get_process_frames() % max_frame
 	if frame > max_frame / 2:
 		frame = max_frame - frame
 	var alpha := 0.1 + 0.05 * 2 * frame / max_frame

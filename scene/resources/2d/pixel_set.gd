@@ -22,3 +22,11 @@ func changed():
 		ints.push_back(int(atlas_texture.region.size.y))
 	data = ints.to_byte_array()
 	texture = atlas.texture
+
+var named_pixels: Dictionary[StringName, int]
+func get_pixel(name: StringName) -> int:
+	if named_pixels.has(name):
+		return named_pixels[name]
+	return named_pixels.get_or_add(name, pixels.find_custom(func(pixel: Pixel):
+		return pixel.name == name
+	))

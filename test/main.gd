@@ -6,13 +6,17 @@ static var save_id := 0
 static var saves_dir := IS.open("user://saves")
 static var save_dir := IS.open_dir(saves_dir, str(save_id))
 static var chunks_dir := IS.open_dir(Main.save_dir, "chunks")
-static var time := 0
 
 func _init():
 	Main.node = self
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MAXIMIZED)
 	var cursor := preload("res://test/textures/mouse_cursor_big.png")
 	DisplayServer.cursor_set_custom_image(cursor, DisplayServer.CURSOR_ARROW, Vector2(20, 20))
-
-func _process(_delta):
-	time += 1
+	var a = -30
+	var b = 31
+	print(posmod(a, b))
+	print(b - -a % b)
+	#print(posmod(-23, 31))
+	#print(0xFFFFFFE1)
+	#for i in range(-1, -5, -1):
+		#print(i, ", ", i % 4)

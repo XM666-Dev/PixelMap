@@ -3,7 +3,8 @@ class_name PixelMap extends Node2D
 const GROUP_SIZE := Vector2i(32, 32)
 
 @export var pixel_set: PixelSet
-var render_extents: Vector2i
+#var render_extents: Vector2i
+var size: Vector2i
 var texture := Texture2DRD.new()
 
 @export var process_extents: Vector2i
@@ -87,17 +88,24 @@ var buf_chunks: RID
 var uniform_set: RID
 
 func get_size() -> Vector2i:
-	return render_extents * Chunk.SIZE
+	#return render_extents * Chunk.SIZE
+	#return IS.get_viewport_rect_global(self).size + Vector2.ONE
+	return IS.get_viewport_rect_global(self).size.ceil() + Vector2.ONE
+	#双侧向上取整
+	#I called it side ceil. do it on every region ranging
 
-func get_render_extents() -> Vector2i:
-	var rect := IS.get_viewport_rect_global(self)
-	return Vector2i((rect.size / Vector2(Chunk.SIZE)).ceil()) + Vector2i.ONE
+#func get_render_extents() -> Vector2i:
+	#var rect := IS.get_viewport_rect_global(self)
+	#return Vector2i((rect.size / Vector2(Chunk.SIZE)).ceil()) + Vector2i.ONE
+func get_chunk_extents() -> Vector2i:
+	return (Vector2(size) / Vector2(Chunk.SIZE)).ceil() + Vector2.ONE
 
 func get_render_rect() -> Rect2i:
 	var rect := IS.get_viewport_rect_global(self)
-	var rect_position := Vector2i((rect.position / Vector2(Chunk.SIZE)).floor())
+	var rect_position := Vector2i((rect.position / Vector2(Chunk.SIZE)).floor()) #建议先转i再除
 	var rect_end := Vector2i((rect.end / Vector2(Chunk.SIZE)).ceil())
 	return IS.rect2i_range(rect_position, rect_end)
+	#同样为双侧向上取整的应用
 
 func get_process_rect() -> Rect2i:
 	var rect := IS.get_viewport_rect_global(self)
@@ -130,7 +138,8 @@ static func _static_init():
 	prepare_shader()
 
 func _ready():
-	render_extents = get_render_extents()
+	#render_extents = get_render_extents()
+	size = get_size()
 	prepare_pixel_set()
 	prepare_map()
 	prepare_chunks()
@@ -165,8 +174,8 @@ func prepare_pixel_set():
 	buf_pixel_set = rd.storage_buffer_create(pixel_set.data.size(), pixel_set.data)
 
 func prepare_map():
-	var size := get_size()
-	var format = RDTextureFormat.new()
+	#var size := get_size()
+	var format := RDTextureFormat.new()
 	format.format = RenderingDevice.DATA_FORMAT_R8G8B8A8_UNORM
 	format.width = size.x
 	format.height = size.y
@@ -179,8 +188,10 @@ func prepare_map():
 	texture.texture_rd_rid = img_map
 
 func prepare_chunks():
-	var size := get_size()
-	var size_bytes := size.x * size.y * Chunk.TILE_SIZE * 4
+	#var size := get_size()
+	#var size_bytes := size.x * size.y * Chunk.TILE_SIZE * 4
+	var chunk_extents := get_chunk_extents()
+	var size_bytes := chunk_extents.x * chunk_extents.y * Chunk.SIZE.x * Chunk.SIZE.y * Chunk.TILE_SIZE * 4
 	buf_chunks = rd.storage_buffer_create(size_bytes)
 
 func prepare_uniform_set():
@@ -213,30 +224,30 @@ func prepare_uniform_set():
 	uniform_set = rd.uniform_set_create([uni_tex_pixel_set, uni_buf_pixel_set, uni_img_map, uni_buf_map, uni_buf_chunks], shader, 0)
 
 func prepare_compute_list():
-	var viewport_rect := IS.get_viewport_rect_global(self)
 	var compute_list := rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
 	rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
-	var x_groups := IS.posdiv(viewport_rect.size.x, GROUP_SIZE.x) + 1
-	var y_groups := IS.posdiv(viewport_rect.size.y, GROUP_SIZE.y) + 1
-	rd.compute_list_dispatch(compute_list, x_groups, y_groups, 1)
+	var viewport_rect := IS.get_viewport_rect_global(self)
+	var groups := Vector2i(((viewport_rect.end.ceil() - viewport_rect.position.floor()) / Vector2(GROUP_SIZE)).ceil())
+	rd.compute_list_dispatch(compute_list, groups.x, groups.y, 1)
 	rd.compute_list_end()
 
 func _process(_delta):
+	var chunk_extents := get_chunk_extents()
 	var render_rect := get_render_rect()
-	var viewport_rect := IS.get_viewport_rect_global(self)
+	var cell_position := Vector2i(IS.get_viewport_rect_global(self).position.floor())
 	var data := PackedInt32Array([
-		viewport_rect.position.x, viewport_rect.position.y,
-		Main.time
+		cell_position.x, cell_position.y,
+		Engine.get_process_frames()
 	]).to_byte_array()
 	rd.buffer_update(buf_map, 0, data.size(), data)
 	for coords in IS.rect2i_to_points(render_rect):
 		var chunk := get_chunk(coords)
 		var bytes := chunk.data.to_byte_array() if chunk != null else Chunk.NULL_BYTES
-		var size := bytes.size()
-		var render_coords := IS.vector2i_posmodv(coords, render_extents)
-		var render_index := render_coords.y * render_extents.x + render_coords.x
-		rd.buffer_update(buf_chunks, render_index * size, size, bytes)
+		var size_bytes := bytes.size()
+		var render_coords := IS.vector2i_posmodv(coords, chunk_extents)
+		var render_index := render_coords.y * chunk_extents.x + render_coords.x
+		rd.buffer_update(buf_chunks, render_index * size_bytes, size_bytes, bytes)
 	prepare_compute_list()
 	queue_redraw()
 
@@ -283,6 +294,7 @@ func _physics_process(_delta):
 
 	if Input.is_action_just_pressed("ui_down"):
 		print("CHUNKS: %s" % chunks.size())
+		print(size)
 
 func _close_requested() -> void:
 	WorkerThreadPool.wait_for_task_completion(load_task)
@@ -369,7 +381,9 @@ func load_chunk(coords: Vector2i) -> Chunk:
 	var file := FileAccess.open(get_chunk_path(coords), FileAccess.READ)
 	if file != null:
 		chunk.data = file.get_buffer(Chunk.SIZE.x * Chunk.SIZE.y * Chunk.TILE_SIZE * 4).to_int32_array()
-	chunk.data.resize(Chunk.SIZE.x * Chunk.SIZE.y * Chunk.TILE_SIZE)
+	else:
+		chunk.data.resize(Chunk.SIZE.x * Chunk.SIZE.y * Chunk.TILE_SIZE)
+		preload("res://test/resources/world_gen.tres").gen(coords, chunk)
 	return chunk
 
 func save_chunk(coords: Vector2i) -> void:
