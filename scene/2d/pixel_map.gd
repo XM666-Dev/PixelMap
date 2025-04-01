@@ -3,7 +3,6 @@ class_name PixelMap extends Node2D
 const GROUP_SIZE := Vector2i(32, 32)
 
 @export var pixel_set: PixelSet
-#var render_extents: Vector2i
 var size: Vector2i
 var texture := Texture2DRD.new()
 
@@ -88,24 +87,16 @@ var buf_chunks: RID
 var uniform_set: RID
 
 func get_size() -> Vector2i:
-	#return render_extents * Chunk.SIZE
-	#return IS.get_viewport_rect_global(self).size + Vector2.ONE
 	return IS.get_viewport_rect_global(self).size.ceil() + Vector2.ONE
-	#双侧向上取整
-	#I called it side ceil. do it on every region ranging
 
-#func get_render_extents() -> Vector2i:
-	#var rect := IS.get_viewport_rect_global(self)
-	#return Vector2i((rect.size / Vector2(Chunk.SIZE)).ceil()) + Vector2i.ONE
 func get_chunk_extents() -> Vector2i:
 	return (Vector2(size) / Vector2(Chunk.SIZE)).ceil() + Vector2.ONE
 
 func get_render_rect() -> Rect2i:
 	var rect := IS.get_viewport_rect_global(self)
-	var rect_position := Vector2i((rect.position / Vector2(Chunk.SIZE)).floor()) #建议先转i再除
+	var rect_position := Vector2i((rect.position / Vector2(Chunk.SIZE)).floor())
 	var rect_end := Vector2i((rect.end / Vector2(Chunk.SIZE)).ceil())
 	return IS.rect2i_range(rect_position, rect_end)
-	#同样为双侧向上取整的应用
 
 func get_process_rect() -> Rect2i:
 	var rect := IS.get_viewport_rect_global(self)
@@ -138,7 +129,6 @@ static func _static_init():
 	prepare_shader()
 
 func _ready():
-	#render_extents = get_render_extents()
 	size = get_size()
 	prepare_pixel_set()
 	prepare_map()
@@ -174,7 +164,6 @@ func prepare_pixel_set():
 	buf_pixel_set = rd.storage_buffer_create(pixel_set.data.size(), pixel_set.data)
 
 func prepare_map():
-	#var size := get_size()
 	var format := RDTextureFormat.new()
 	format.format = RenderingDevice.DATA_FORMAT_R8G8B8A8_UNORM
 	format.width = size.x
@@ -188,8 +177,6 @@ func prepare_map():
 	texture.texture_rd_rid = img_map
 
 func prepare_chunks():
-	#var size := get_size()
-	#var size_bytes := size.x * size.y * Chunk.TILE_SIZE * 4
 	var chunk_extents := get_chunk_extents()
 	var size_bytes := chunk_extents.x * chunk_extents.y * Chunk.SIZE.x * Chunk.SIZE.y * Chunk.TILE_SIZE * 4
 	buf_chunks = rd.storage_buffer_create(size_bytes)
