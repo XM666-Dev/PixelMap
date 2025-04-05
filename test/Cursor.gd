@@ -47,7 +47,7 @@ func _process(_delta):
 func _draw():
 	var pixel_map := %PixelMap as PixelMap
 	var texture := pixel_map.pixel_set.pixels[pixel_index].texture
-	var rect := Rect2i(pixel_map.get_local_mouse_position().floor(), draw_size)
+	var rect := Rect2(pixel_map.get_local_mouse_position().floor(), draw_size)
 	if texture != null:
 		var width := texture.get_width()
 		var height := texture.get_height()

@@ -19,9 +19,8 @@ static func rect2i_to_points(rect: Rect2i) -> Array[Vector2i]:
 	return points
 
 static func posdiv(x: int, y: int) -> int:
-	var value := x % y
-	if value < 0 and y > 0 or value > 0 and y < 0:
-		return x / y - 1
+	if (x < 0) != (y < 0):
+		x -= y - 1
 	return x / y
 
 static func posdiv_ceil(x: int, y: int) -> int:

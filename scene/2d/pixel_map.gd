@@ -144,12 +144,7 @@ static func prepare_shader():
 	var shader_file := preload("res://servers/rendering/renderer_rd/shaders/pixels.glsl")
 	var shader_spirv := shader_file.get_spirv()
 	shader = rd.shader_create_from_spirv(shader_spirv)
-	var constants := [RDPipelineSpecializationConstant.new(), RDPipelineSpecializationConstant.new()]
-	constants[0].constant_id = 0
-	constants[0].value = Chunk.SIZE.x
-	constants[1].constant_id = 1
-	constants[1].value = Chunk.SIZE.y
-	pipeline = rd.compute_pipeline_create(shader, constants)
+	pipeline = rd.compute_pipeline_create(shader)
 
 func prepare_pixel_set():
 	var format = RDTextureFormat.new()
@@ -254,7 +249,7 @@ func _draw():
 			polygon.push_back(polygon[0])
 			draw_polyline(polygon, Color.WHITE)
 	draw_set_transform(Vector2.ZERO)
-	var mouse_position := get_local_mouse_position()
+	var mouse_position := get_local_mouse_position().floor()
 	var chunk_coords := local_to_chunk(mouse_position)
 	draw_rect(Rect2(chunk_coords * Chunk.SIZE, Chunk.SIZE), Color.WHITE, false)
 	var focus_chunk := get_chunk(chunk_coords)
@@ -264,7 +259,8 @@ func _draw():
 		"%s: %s" % [chunk_coords, "null" if focus_chunk == null else "Chunk"],
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
-		8
+		16,
+		Color.BLACK
 	)
 
 func _physics_process(_delta):
